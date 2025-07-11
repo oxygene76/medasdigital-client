@@ -155,12 +155,17 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 
 // ValidateMessage validates a message
 func (c *Codec) ValidateMessage(msg interface{}) error {
-	// Type assertion to sdk.Msg
+	// Try to cast to sdk.Msg first
 	if sdkMsg, ok := msg.(sdk.Msg); ok {
 		return sdkMsg.ValidateBasic()
 	}
 	
-	return fmt.Errorf("message does not implement sdk.Msg interface")
+	// If not sdk.Msg, check if it's a proto message with ValidateBasic method
+	if validator, ok := msg.(interface{ ValidateBasic() error }); ok {
+		return validator.ValidateBasic()
+	}
+	
+	return fmt.Errorf("message does not implement validation interface")
 }
 
 // GetTypeURL returns the type URL for a message
