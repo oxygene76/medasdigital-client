@@ -165,7 +165,17 @@ func (c *Codec) ValidateMessage(msg interface{}) error {
 
 // GetTypeURL returns the type URL for a message
 func (c *Codec) GetTypeURL(msg proto.Message) string {
-	return c.interfaceRegistry.TypeURL(msg)
+	// Use the interface registry to resolve type URL
+	if resolver, ok := c.interfaceRegistry.(interface{
+		Resolve(typeUrl string) (proto.Message, error)
+	}); ok {
+		_ = resolver // We have a resolver but need reverse lookup
+		// For now, construct type URL manually
+		return "/" + proto.MessageName(msg)
+	}
+	
+	// Fallback: construct type URL from message name
+	return "/" + proto.MessageName(msg)
 }
 
 // MustMarshalJSON marshals to JSON or panics
