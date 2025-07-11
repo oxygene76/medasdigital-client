@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	comethttp "github.com/cometbft/cometbft/rpc/client/http"
 	comet "github.com/cometbft/cometbft/rpc/core/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 
@@ -83,7 +84,7 @@ func (c *Client) StoreAnalysisResult(creator, clientID, analysisType string, dat
 		Creator:      creator,
 		ClientID:     clientID,
 		AnalysisType: analysisType,
-		Data:         data,
+		Data:         string(data), // Convert []byte to string
 		BlockHeight:  height,
 		TxHash:       txHash,
 	}
@@ -107,14 +108,14 @@ func (c *Client) UpdateClient(creator, clientID string, capabilities []string, m
 
 	// Create update message
 	msg := &MsgUpdateClient{
-		Creator:      creator,
-		ClientID:     clientID,
-		Capabilities: capabilities,
-		Metadata:     string(metadataBytes),
+		Creator:         creator,
+		ClientID:        clientID,
+		NewCapabilities: capabilities,
+		NewMetadata:     string(metadataBytes),
 	}
 
 	// Send transaction
-	_, err := c.sendTransaction(msg, creator)
+	_, err = c.sendTransaction(msg, creator)
 	if err != nil {
 		return fmt.Errorf("failed to update client: %w", err)
 	}
@@ -268,7 +269,7 @@ func (c *Client) StartEventMonitoring() error {
 	}
 
 	// Cast client to CometBFT HTTP client for event subscription
-	if httpClient, ok := c.clientCtx.Client.(*comet.HTTP); ok {
+	if httpClient, ok := c.clientCtx.Client.(*comethttp.HTTP); ok {
 		// Subscribe to events
 		query := "tm.event='NewBlock'"
 		err := httpClient.Subscribe(context.Background(), "medas-client", query, 100)
@@ -290,7 +291,7 @@ func (c *Client) StopEventMonitoring() error {
 	}
 
 	// Cast client to CometBFT HTTP client for event unsubscription
-	if httpClient, ok := c.clientCtx.Client.(*comet.HTTP); ok {
+	if httpClient, ok := c.clientCtx.Client.(*comethttp.HTTP); ok {
 		query := "tm.event='NewBlock'"
 		err := httpClient.Unsubscribe(context.Background(), "medas-client", query)
 		if err != nil {
@@ -312,7 +313,7 @@ func (c *Client) GetChainStatus() (*ChainStatus, error) {
 
 	// Get network info
 	var networkInfo *comet.ResultNetInfo
-	if httpClient, ok := c.clientCtx.Client.(*comet.HTTP); ok {
+	if httpClient, ok := c.clientCtx.Client.(*comethttp.HTTP); ok {
 		networkInfo, err = httpClient.NetInfo(context.Background())
 		if err != nil {
 			// Don't fail if network info is not available
