@@ -10,11 +10,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	"github.com/tendermint/tendermint/rpc/client/http"
+	comethttp "github.com/cometbft/cometbft/rpc/client/http"
 
 	"github.com/oxygene76/medasdigital-client/internal/types"
 	"github.com/oxygene76/medasdigital-client/pkg/analysis"
@@ -25,14 +26,14 @@ import (
 
 // MedasDigitalClient represents the main client for astronomical analysis
 type MedasDigitalClient struct {
-	config      *utils.Config
-	clientCtx   client.Context
-	clientID    string
+	config       *utils.Config
+	clientCtx    client.Context
+	clientID     string
 	capabilities []string
 	isRegistered bool
-	gpuManager  *gpu.Manager
-	analyzer    *analysis.Manager
-	blockchain  *blockchain.Client
+	gpuManager   *gpu.Manager
+	analyzer     *analysis.Manager
+	blockchain   *blockchain.Client
 }
 
 // NewMedasDigitalClient creates a new MedasDigital client instance
@@ -70,19 +71,24 @@ func (c *MedasDigitalClient) initializeBlockchainClient() error {
 	interfaceRegistry := types.NewInterfaceRegistry()
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
+	// Address codecs - required for 0.50
+	addressCodec := address.NewBech32Codec(c.config.Chain.Bech32Prefix)
+	validatorAddressCodec := address.NewBech32Codec(c.config.Chain.Bech32Prefix + "valoper")
+	consensusAddressCodec := address.NewBech32Codec(c.config.Chain.Bech32Prefix + "valcons")
+
 	// Keyring setup
-	kr, err := keyring.New(sdk.KeyringServiceName(), keyring.BackendOS, c.config.Client.KeyringDir, nil)
+	kr, err := keyring.New(sdk.KeyringServiceName(), keyring.BackendOS, c.config.Client.KeyringDir, nil, addressCodec)
 	if err != nil {
 		return fmt.Errorf("failed to create keyring: %w", err)
 	}
 
-	// RPC Client setup
-	rpcClient, err := http.New(c.config.Chain.RPCEndpoint, "/websocket")
+	// RPC Client setup - Updated to use CometBFT
+	rpcClient, err := comethttp.New(c.config.Chain.RPCEndpoint, "/websocket")
 	if err != nil {
 		return fmt.Errorf("failed to create RPC client: %w", err)
 	}
 
-	// Client Context setup
+	// Client Context setup with address codecs
 	c.clientCtx = client.Context{}.
 		WithCodec(marshaler).
 		WithInterfaceRegistry(interfaceRegistry).
@@ -92,7 +98,10 @@ func (c *MedasDigitalClient) initializeBlockchainClient() error {
 		WithBroadcastMode("block").
 		WithChainID(c.config.Chain.ID).
 		WithKeyring(kr).
-		WithClient(rpcClient)
+		WithClient(rpcClient).
+		WithAddressCodec(addressCodec).
+		WithValidatorAddressCodec(validatorAddressCodec).
+		WithConsensusAddressCodec(consensusAddressCodec)
 
 	return nil
 }
@@ -138,11 +147,11 @@ func (c *MedasDigitalClient) Register(capabilities []string, metadata, from stri
 
 func (c *MedasDigitalClient) generateMetadata(userMetadata string) string {
 	metadata := map[string]interface{}{
-		"version":         "1.0.0",
-		"capabilities":    c.capabilities,
-		"created_at":      time.Now().Format(time.RFC3339),
-		"user_metadata":   userMetadata,
-		"gpu_enabled":     c.config.GPU.Enabled,
+		"version":       "1.0.0",
+		"capabilities":  c.capabilities,
+		"created_at":    time.Now().Format(time.RFC3339),
+		"user_metadata": userMetadata,
+		"gpu_enabled":   c.config.GPU.Enabled,
 	}
 
 	if c.gpuManager != nil {
@@ -345,7 +354,7 @@ func (c *MedasDigitalClient) Status() error {
 // Results retrieves recent analysis results
 func (c *MedasDigitalClient) Results(limit int) error {
 	fmt.Printf("=== Recent Analysis Results (limit: %d) ===\n", limit)
-	
+
 	results, err := c.blockchain.GetAnalysisResults(c.clientID, limit)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve results: %w", err)
