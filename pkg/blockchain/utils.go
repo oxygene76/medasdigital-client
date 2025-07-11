@@ -83,7 +83,16 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 
 	// Create keyring (v0.50 compatible)
 	realAddressCodec := NewBech32AddressCodec(cb.bech32Prefix)
-	kr, err := keyring.New(sdk.KeyringServiceName(), cb.keyringBackend, cb.keyringDir, nil, realAddressCodec.(*Bech32AddressCodec).codec)
+	
+	// Get the underlying SDK codec for keyring creation
+	var sdkCodec address.Codec
+	if bech32Codec, ok := realAddressCodec.(*Bech32AddressCodec); ok {
+		sdkCodec = bech32Codec.GetSDKCodec()
+	} else {
+		return nil, fmt.Errorf("failed to get SDK codec")
+	}
+	
+	kr, err := keyring.New(sdk.KeyringServiceName(), cb.keyringBackend, cb.keyringDir, nil, sdkCodec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create keyring: %w", err)
 	}
@@ -99,9 +108,9 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 		WithChainID(cb.chainID).
 		WithKeyring(kr).
 		WithClient(rpcClient).
-		WithAddressCodec(realAddressCodec.(*Bech32AddressCodec).codec).
-		WithValidatorAddressCodec(NewBech32AddressCodec(cb.bech32Prefix + "valoper").(*Bech32AddressCodec).codec).
-		WithConsensusAddressCodec(NewBech32AddressCodec(cb.bech32Prefix + "valcons").(*Bech32AddressCodec).codec)
+		WithAddressCodec(sdkCodec).
+		WithValidatorAddressCodec(NewBech32AddressCodec(cb.bech32Prefix + "valoper").(*Bech32AddressCodec).GetSDKCodec()).
+		WithConsensusAddressCodec(NewBech32AddressCodec(cb.bech32Prefix + "valcons").(*Bech32AddressCodec).GetSDKCodec())
 
 	return NewClient(clientCtx), nil
 }
