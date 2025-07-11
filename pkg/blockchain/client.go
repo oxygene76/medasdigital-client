@@ -2,31 +2,34 @@ package blockchain
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"cosmossdk.io/math"
-	comethttp "github.com/cometbft/cometbft/rpc/client/http"
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	comet "github.com/cometbft/cometbft/rpc/core/types"
+	abci "github.com/cometbft/cometbft/abci/types"
 
-	"github.com/oxygene76/medasdigital-client/internal/types"
+	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
 
-// Client represents a blockchain client for the MedasDigital network
+// Client handles blockchain communication for MedasDigital
 type Client struct {
-	clientCtx     client.Context
-	txFactory     tx.Factory
-	retryAttempts int
-	retryDelay    time.Duration
+	clientCtx  client.Context
+	txFactory  tx.Factory
+	codec      *Codec
+	monitoring bool
 }
 
 // NewClient creates a new blockchain client
 func NewClient(clientCtx client.Context) *Client {
-	// Create transaction factory for v0.50
+	// Create transaction factory
 	txFactory := tx.Factory{}.
 		WithTxConfig(clientCtx.TxConfig).
 		WithAccountRetriever(clientCtx.AccountRetriever).
@@ -36,65 +39,36 @@ func NewClient(clientCtx client.Context) *Client {
 		WithGas(200000)
 
 	return &Client{
-		clientCtx:     clientCtx,
-		txFactory:     txFactory,
-		retryAttempts: 3,
-		retryDelay:    time.Second * 2,
+		clientCtx:  clientCtx,
+		txFactory:  txFactory,
+		codec:      NewCodec(),
+		monitoring: false,
 	}
 }
 
-// Initialize sets up the blockchain client connection
-func (c *Client) Initialize(endpoints []string) error {
-	for _, endpoint := range endpoints {
-		if err := c.testConnection(endpoint); err == nil {
-			// Connection successful
-			rpcClient, err := comethttp.New(endpoint, "/websocket")
-			if err != nil {
-				continue
-			}
-			
-			c.clientCtx = c.clientCtx.WithClient(rpcClient)
-			return nil
-		}
-	}
-	
-	return fmt.Errorf("failed to connect to any endpoint")
-}
-
-// testConnection tests connection to a specific endpoint
-func (c *Client) testConnection(endpoint string) error {
-	rpcClient, err := comethttp.New(endpoint, "/websocket")
+// RegisterClient registers a new analysis client on the blockchain
+func (c *Client) RegisterClient(creator string, capabilities []string, metadata map[string]interface{}) (string, error) {
+	// Convert metadata to JSON
+	metadataBytes, err := c.codec.MarshalJSON(metadata)
 	if err != nil {
-		return fmt.Errorf("failed to create RPC client: %w", err)
+		return "", fmt.Errorf("failed to marshal metadata: %w", err)
 	}
-	
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	
-	_, err = rpcClient.Status(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get status: %w", err)
-	}
-	
-	return nil
-}
 
-// RegisterClient registers a new client on the blockchain
-func (c *Client) RegisterClient(creator string, capabilities []string, metadata string) (string, error) {
+	// Create registration message
 	msg := &MsgRegisterClient{
 		Creator:      creator,
 		Capabilities: capabilities,
-		Metadata:     metadata,
+		Metadata:     string(metadataBytes),
 	}
 
-	// Send transaction with retry logic
-	res, err := c.sendTransaction(msg)
+	// Send transaction
+	res, err := c.sendTransaction(msg, creator)
 	if err != nil {
 		return "", fmt.Errorf("failed to register client: %w", err)
 	}
 
 	// Extract client ID from events
-	clientID, err := c.extractClientIDFromResponse(res)
+	clientID, err := c.extractClientIDFromEvents(res.Events)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract client ID: %w", err)
 	}
@@ -103,23 +77,19 @@ func (c *Client) RegisterClient(creator string, capabilities []string, metadata 
 }
 
 // StoreAnalysisResult stores analysis results on the blockchain
-func (c *Client) StoreAnalysisResult(creator, clientID, analysisType string, data map[string]interface{}, blockHeight int64, txHash string) error {
-	// Convert data to JSON string
-	dataBytes, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal analysis data: %w", err)
-	}
-
+func (c *Client) StoreAnalysisResult(creator, clientID, analysisType string, data []byte, height int64, txHash string) error {
+	// Create analysis storage message
 	msg := &MsgStoreAnalysis{
 		Creator:      creator,
 		ClientID:     clientID,
 		AnalysisType: analysisType,
-		Data:         string(dataBytes),
-		BlockHeight:  blockHeight,
+		Data:         data,
+		BlockHeight:  height,
 		TxHash:       txHash,
 	}
 
-	_, err = c.sendTransaction(msg)
+	// Send transaction
+	_, err := c.sendTransaction(msg, creator)
 	if err != nil {
 		return fmt.Errorf("failed to store analysis result: %w", err)
 	}
@@ -127,283 +97,158 @@ func (c *Client) StoreAnalysisResult(creator, clientID, analysisType string, dat
 	return nil
 }
 
-// sendTransaction sends a transaction with retry logic
-func (c *Client) sendTransaction(msg sdk.Msg) (*sdk.TxResponse, error) {
-	var lastErr error
-
-	for attempt := 0; attempt < c.retryAttempts; attempt++ {
-		res, err := c.attemptTransaction(msg)
-		if err == nil {
-			return res, nil
-		}
-
-		lastErr = err
-		if attempt < c.retryAttempts-1 {
-			time.Sleep(c.retryDelay)
-		}
+// UpdateClient updates client information
+func (c *Client) UpdateClient(creator, clientID string, capabilities []string, metadata map[string]interface{}) error {
+	// Convert metadata to JSON
+	metadataBytes, err := c.codec.MarshalJSON(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	return nil, fmt.Errorf("transaction failed after %d attempts: %w", c.retryAttempts, lastErr)
+	// Create update message
+	msg := &MsgUpdateClient{
+		Creator:      creator,
+		ClientID:     clientID,
+		Capabilities: capabilities,
+		Metadata:     string(metadataBytes),
+	}
+
+	// Send transaction
+	_, err := c.sendTransaction(msg, creator)
+	if err != nil {
+		return fmt.Errorf("failed to update client: %w", err)
+	}
+
+	return nil
 }
 
-// attemptTransaction makes a single transaction attempt
-func (c *Client) attemptTransaction(msg sdk.Msg) (*sdk.TxResponse, error) {
+// DeactivateClient deactivates a client
+func (c *Client) DeactivateClient(creator, clientID string) error {
+	// Create deactivation message
+	msg := &MsgDeactivateClient{
+		Creator:  creator,
+		ClientID: clientID,
+	}
+
+	// Send transaction
+	_, err := c.sendTransaction(msg, creator)
+	if err != nil {
+		return fmt.Errorf("failed to deactivate client: %w", err)
+	}
+
+	return nil
+}
+
+// sendTransaction signs and broadcasts a transaction
+func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxResponse, error) {
 	// Create transaction builder
 	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
 	if err := txBuilder.SetMsgs(msg); err != nil {
 		return nil, fmt.Errorf("failed to set messages: %w", err)
 	}
 
-	// Estimate gas using the new v0.50 API
-	gasUsed, err := c.EstimateGas([]sdk.Msg{msg})
+	// Estimate gas
+	gasLimit, err := c.estimateGas([]sdk.Msg{msg})
 	if err != nil {
-		// Fall back to default gas if estimation fails
-		gasUsed = 200000
+		return nil, fmt.Errorf("failed to estimate gas: %w", err)
 	}
 
 	// Set gas limit with buffer
-	gasLimit := uint64(float64(gasUsed) * 1.3) // 30% buffer
 	txBuilder.SetGasLimit(gasLimit)
 
-	// Set fee
-	feeAmount := math.NewInt(int64(gasLimit * 25)) // 25 units per gas
-	fees := sdk.NewCoins(sdk.NewCoin("umedas", feeAmount))
-	txBuilder.SetFeeAmount(fees)
+	// Set fee (optional - can be calculated from gas price)
+	// For now, we'll let the node calculate the fee
 
-	// Sign the transaction using v0.50 API
-	ctx := context.Background()
-	err = tx.Sign(ctx, c.txFactory, c.clientCtx.GetFromName(), txBuilder, true)
+	// Sign transaction - FIXED: Added context parameter for v0.50
+	err = tx.Sign(context.Background(), c.txFactory, signerName, txBuilder, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
 
-	// Broadcast transaction
+	// Encode transaction
 	txBytes, err := c.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode transaction: %w", err)
 	}
 
-	return c.clientCtx.BroadcastTx(txBytes)
+	// Broadcast transaction
+	res, err := c.clientCtx.BroadcastTx(txBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to broadcast transaction: %w", err)
+	}
+
+	return res, nil
 }
 
-// EstimateGas estimates gas for messages using the new v0.50 API
-func (c *Client) EstimateGas(msgs []sdk.Msg) (uint64, error) {
+// estimateGas estimates gas for a transaction - FIXED: Handle 3 return values
+func (c *Client) estimateGas(msgs []sdk.Msg) (uint64, error) {
 	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
 	if err := txBuilder.SetMsgs(msgs...); err != nil {
 		return 0, fmt.Errorf("failed to set messages: %w", err)
 	}
 
-	// Set a high gas limit for simulation
+	// Set temporary gas limit for simulation
 	txBuilder.SetGasLimit(1000000)
 
-	// Calculate gas using v0.50 API
-	adjustedGas, _, err := tx.CalculateGas(c.clientCtx, c.txFactory, msgs...)
+	// Calculate gas - FIXED: v0.50 returns 3 values: simRes, adjustedGas, error
+	simRes, adjustedGas, err := tx.CalculateGas(c.clientCtx, c.txFactory, msgs...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to calculate gas: %w", err)
 	}
 
+	// Use the adjusted gas value (uint64) - simRes contains detailed simulation info
+	_ = simRes // We can use this for detailed gas info if needed in the future
 	return adjustedGas, nil
 }
 
-// WaitForTransaction waits for a transaction to be confirmed
-func (c *Client) WaitForTransaction(txHash string, timeout time.Duration) (*sdk.TxResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("timeout waiting for transaction confirmation")
-		case <-ticker.C:
-			// Try to get the transaction
-			txResponse, err := c.clientCtx.Client.Tx(ctx, []byte(txHash), false)
-			if err == nil {
-				// Transaction found and confirmed
-				return &sdk.TxResponse{
-					Height:    txResponse.Height,
-					TxHash:    txHash,
-					Code:      txResponse.TxResult.Code,
-					Data:      string(txResponse.TxResult.Data),
-					RawLog:    txResponse.TxResult.Log,
-					Logs:      sdk.ABCIMessageLogs{},
-					GasWanted: txResponse.TxResult.GasWanted,
-					GasUsed:   txResponse.TxResult.GasUsed,
-				}, nil
-			}
-			// Continue polling if transaction not found
-		}
-	}
-}
-
-// GetClient retrieves client information by ID
-func (c *Client) GetClient(clientID string) (*types.RegisteredClient, error) {
-	// This would query the x/clientregistry module
-	// For now, return a placeholder implementation
-	// In production, this would use ABCI query
+// GetClient retrieves client information
+func (c *Client) GetClient(clientID string) (*itypes.RegisteredClient, error) {
+	// Query client information from blockchain
+	queryPath := fmt.Sprintf("/medas.client.v1.Query/Client")
 	
-	query := fmt.Sprintf("custom/clientregistry/client/%s", clientID)
-	res, _, err := c.clientCtx.QueryWithData(query, nil)
+	// Create query request (this would need proper protobuf message)
+	reqBytes := []byte(fmt.Sprintf(`{"client_id":"%s"}`, clientID))
+	
+	// Execute query
+	res, _, err := c.clientCtx.QueryWithData(queryPath, reqBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query client: %w", err)
 	}
-	
-	var client types.RegisteredClient
-	if err := json.Unmarshal(res, &client); err != nil {
+
+	// Parse response
+	var client itypes.RegisteredClient
+	if err := c.codec.UnmarshalJSON(res, &client); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal client: %w", err)
 	}
-	
+
 	return &client, nil
 }
 
-// GetAnalysisResults retrieves analysis results for a client
-func (c *Client) GetAnalysisResults(clientID string, limit int) ([]*types.StoredAnalysis, error) {
-	// This would query the x/clientregistry module  
-	// For now, return a placeholder implementation
+// GetAnalysisResults retrieves analysis results
+func (c *Client) GetAnalysisResults(clientID string, limit int) ([]*itypes.StoredAnalysis, error) {
+	// Query analysis results from blockchain
+	queryPath := fmt.Sprintf("/medas.analysis.v1.Query/AnalysisResults")
 	
-	query := fmt.Sprintf("custom/clientregistry/analysis/%s?limit=%d", clientID, limit)
-	res, _, err := c.clientCtx.QueryWithData(query, nil)
+	// Create query request
+	reqBytes := []byte(fmt.Sprintf(`{"client_id":"%s","limit":%d}`, clientID, limit))
+	
+	// Execute query
+	res, _, err := c.clientCtx.QueryWithData(queryPath, reqBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query analysis results: %w", err)
 	}
-	
-	var results []*types.StoredAnalysis
-	if err := json.Unmarshal(res, &results); err != nil {
+
+	// Parse response
+	var results []*itypes.StoredAnalysis
+	if err := c.codec.UnmarshalJSON(res, &results); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal results: %w", err)
 	}
-	
+
 	return results, nil
 }
 
-// Query performs a generic query on the blockchain
-func (c *Client) Query(queryType, queryID string) (interface{}, error) {
-	switch queryType {
-	case "client":
-		return c.GetClient(queryID)
-	case "analysis": 
-		return c.GetAnalysisResults(queryID, 10)
-	default:
-		return nil, fmt.Errorf("unsupported query type: %s", queryType)
-	}
-}
-
-// GetAnalysisByID retrieves a specific analysis by ID  
-func (c *Client) GetAnalysisByID(analysisID string) (*types.StoredAnalysis, error) {
-	query := fmt.Sprintf("custom/clientregistry/analysis-by-id/%s", analysisID)
-	res, _, err := c.clientCtx.QueryWithData(query, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query analysis: %w", err)
-	}
-	
-	var analysis types.StoredAnalysis
-	if err := json.Unmarshal(res, &analysis); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal analysis: %w", err)
-	}
-	
-	return &analysis, nil
-}
-
-// GetBlock retrieves a block by height
-func (c *Client) GetBlock(height int64) (*comet.ResultBlock, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	return c.clientCtx.Client.Block(ctx, &height)
-}
-
-// GetLatestBlock retrieves the latest block
-func (c *Client) GetLatestBlock() (*comet.ResultBlock, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	return c.clientCtx.Client.Block(ctx, nil)
-}
-
-// GetTransaction retrieves a transaction by hash
-func (c *Client) GetTransaction(txHash string) (*comet.ResultTx, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	return c.clientCtx.Client.Tx(ctx, []byte(txHash), false)
-}
-
-// GetChainStatus retrieves the current chain status
-func (c *Client) GetChainStatus() (*comet.ResultStatus, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	return c.clientCtx.Client.Status(ctx)
-}
-
-// GetBalance retrieves account balance
-func (c *Client) GetBalance(address string) (sdk.Coins, error) {
-	_, err := sdk.AccAddressFromBech32(address)
-	if err != nil {
-		return nil, fmt.Errorf("invalid address: %w", err)
-	}
-
-	// This would use the bank module query
-	// For now, return a placeholder
-	return sdk.NewCoins(), nil
-}
-
-// SubscribeToEvents subscribes to blockchain events
-func (c *Client) SubscribeToEvents(query string) (<-chan comet.ResultEvent, error) {
-	ctx := context.Background()
-	
-	// Cast to the underlying CometBFT client
-	cometClient, ok := c.clientCtx.Client.(*comethttp.HTTP)
-	if !ok {
-		return nil, fmt.Errorf("client is not a CometBFT HTTP client")
-	}
-	
-	out, err := cometClient.Subscribe(ctx, "medasdigital-client", query, 100)
-	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe to events: %w", err)
-	}
-
-	return out, nil
-}
-
-// UnsubscribeFromEvents unsubscribes from blockchain events
-func (c *Client) UnsubscribeFromEvents(query string) error {
-	ctx := context.Background()
-	
-	// Cast to the underlying CometBFT client
-	cometClient, ok := c.clientCtx.Client.(*comethttp.HTTP)
-	if !ok {
-		return fmt.Errorf("client is not a CometBFT HTTP client")
-	}
-	
-	err := cometClient.Unsubscribe(ctx, "medasdigital-client", query)
-	if err != nil {
-		return fmt.Errorf("failed to unsubscribe from events: %w", err)
-	}
-
-	return nil
-}
-
-// extractClientIDFromResponse extracts client ID from transaction response
-func (c *Client) extractClientIDFromResponse(res *sdk.TxResponse) (string, error) {
-	// Parse events to find client ID
-	events := c.parseEvents(res.Events)
-	
-	if clientData, ok := events["client_registered"]; ok {
-		if clientMap, ok := clientData.(map[string]string); ok {
-			if clientID, ok := clientMap["client_id"]; ok {
-				return clientID, nil
-			}
-		}
-	}
-	
-	// Fallback: generate client ID if not found in events
-	return fmt.Sprintf("client_%d", time.Now().Unix()), nil
-}
-
-// extractClientIDFromEvents extracts client ID from transaction events (legacy method)
-func (c *Client) extractClientIDFromEvents(events []sdk.Event) (string, error) {
+// extractClientIDFromEvents extracts client ID from transaction events
+func (c *Client) extractClientIDFromEvents(events []abci.Event) (string, error) {
 	for _, event := range events {
 		if event.Type == "client_registered" {
 			for _, attr := range event.Attributes {
@@ -413,75 +258,131 @@ func (c *Client) extractClientIDFromEvents(events []sdk.Event) (string, error) {
 			}
 		}
 	}
-	
-	// Fallback: generate client ID if not found in events
-	return fmt.Sprintf("client_%d", time.Now().Unix()), nil
+	return "", fmt.Errorf("client_id not found in events")
 }
 
-// parseEvents parses transaction events into structured data
-func (c *Client) parseEvents(events []sdk.Event) map[string]interface{} {
-	parsed := make(map[string]interface{})
-	
-	for _, event := range events {
-		eventData := make(map[string]string)
-		for _, attr := range event.Attributes {
-			// In v0.50, attributes are already strings
-			eventData[string(attr.Key)] = string(attr.Value)
+// StartEventMonitoring starts monitoring blockchain events
+func (c *Client) StartEventMonitoring() error {
+	if c.monitoring {
+		return fmt.Errorf("event monitoring already started")
+	}
+
+	// Cast client to CometBFT HTTP client for event subscription
+	if httpClient, ok := c.clientCtx.Client.(*comet.HTTP); ok {
+		// Subscribe to events
+		query := "tm.event='NewBlock'"
+		err := httpClient.Subscribe(context.Background(), "medas-client", query, 100)
+		if err != nil {
+			return fmt.Errorf("failed to subscribe to events: %w", err)
 		}
-		parsed[event.Type] = eventData
-	}
-	
-	return parsed
-}
-
-// GetNetworkInfo retrieves network information
-func (c *Client) GetNetworkInfo() (*comet.ResultNetInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Cast to the underlying CometBFT client
-	cometClient, ok := c.clientCtx.Client.(*comethttp.HTTP)
-	if !ok {
-		return nil, fmt.Errorf("client is not a CometBFT HTTP client")
+	} else {
+		return fmt.Errorf("client does not support event subscription")
 	}
 
-	return cometClient.NetInfo(ctx)
+	c.monitoring = true
+	return nil
 }
 
-// GetValidators retrieves the current validator set
-func (c *Client) GetValidators(height int64) (*comet.ResultValidators, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+// StopEventMonitoring stops monitoring blockchain events
+func (c *Client) StopEventMonitoring() error {
+	if !c.monitoring {
+		return fmt.Errorf("event monitoring not started")
+	}
 
-	return c.clientCtx.Client.Validators(ctx, &height, nil, nil)
+	// Cast client to CometBFT HTTP client for event unsubscription
+	if httpClient, ok := c.clientCtx.Client.(*comet.HTTP); ok {
+		query := "tm.event='NewBlock'"
+		err := httpClient.Unsubscribe(context.Background(), "medas-client", query)
+		if err != nil {
+			return fmt.Errorf("failed to unsubscribe from events: %w", err)
+		}
+	}
+
+	c.monitoring = false
+	return nil
 }
 
-// IsHealthy checks if the blockchain client is healthy
-func (c *Client) IsHealthy() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+// GetChainStatus returns blockchain status information
+func (c *Client) GetChainStatus() (*ChainStatus, error) {
+	// Get node status
+	status, err := c.clientCtx.Client.Status(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node status: %w", err)
+	}
 
-	_, err := c.clientCtx.Client.Status(ctx)
-	return err == nil
+	// Get network info
+	var networkInfo *comet.ResultNetInfo
+	if httpClient, ok := c.clientCtx.Client.(*comet.HTTP); ok {
+		networkInfo, err = httpClient.NetInfo(context.Background())
+		if err != nil {
+			// Don't fail if network info is not available
+			networkInfo = nil
+		}
+	}
+
+	chainStatus := &ChainStatus{
+		ChainID:         status.NodeInfo.Network,
+		LatestHeight:    status.SyncInfo.LatestBlockHeight,
+		LatestBlockTime: status.SyncInfo.LatestBlockTime,
+		CatchingUp:      status.SyncInfo.CatchingUp,
+		NodeID:          string(status.NodeInfo.DefaultNodeID),
+		NodeVersion:     status.NodeInfo.Version,
+		Peers:           0,
+	}
+
+	if networkInfo != nil {
+		chainStatus.Peers = networkInfo.NPeers
+	}
+
+	return chainStatus, nil
 }
 
-// GetClientContext returns the underlying client context
-func (c *Client) GetClientContext() client.Context {
-	return c.clientCtx
+// GetLatestBlock returns the latest block information
+func (c *Client) GetLatestBlock() (*BlockInfo, error) {
+	// Get latest block
+	block, err := c.clientCtx.Client.Block(context.Background(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest block: %w", err)
+	}
+
+	blockInfo := &BlockInfo{
+		Height:    block.Block.Height,
+		Hash:      block.BlockID.Hash.String(),
+		Time:      block.Block.Time,
+		NumTxs:    len(block.Block.Txs),
+		Proposer:  block.Block.ProposerAddress.String(),
+	}
+
+	return blockInfo, nil
 }
 
-// SetRetryConfig sets retry configuration
-func (c *Client) SetRetryConfig(attempts int, delay time.Duration) {
-	c.retryAttempts = attempts
-	c.retryDelay = delay
+// Health checks the health of the blockchain connection
+func (c *Client) Health() error {
+	// Try to get node status
+	_, err := c.clientCtx.Client.Status(context.Background())
+	if err != nil {
+		return fmt.Errorf("blockchain connection unhealthy: %w", err)
+	}
+
+	return nil
 }
 
-// GetChainID returns the chain ID
-func (c *Client) GetChainID() string {
-	return c.clientCtx.ChainID
+// ChainStatus represents blockchain status
+type ChainStatus struct {
+	ChainID         string    `json:"chain_id"`
+	LatestHeight    int64     `json:"latest_height"`
+	LatestBlockTime time.Time `json:"latest_block_time"`
+	CatchingUp      bool      `json:"catching_up"`
+	NodeID          string    `json:"node_id"`
+	NodeVersion     string    `json:"node_version"`
+	Peers           int       `json:"peers"`
 }
 
-// GetFromAddress returns the from address
-func (c *Client) GetFromAddress() sdk.AccAddress {
-	return c.clientCtx.GetFromAddress()
+// BlockInfo represents block information
+type BlockInfo struct {
+	Height   int64     `json:"height"`
+	Hash     string    `json:"hash"`
+	Time     time.Time `json:"time"`
+	NumTxs   int       `json:"num_txs"`
+	Proposer string    `json:"proposer"`
 }
