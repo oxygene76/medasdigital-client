@@ -3,7 +3,7 @@ package blockchain
 import (
 	"fmt"
 	
-	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
+	"github.com/cosmos/cosmos-sdk/codec/address"
 )
 
 // AddressCodec interface for address operations
@@ -14,13 +14,13 @@ type AddressCodec interface {
 
 // Bech32AddressCodec implements AddressCodec using cosmos-sdk address codec
 type Bech32AddressCodec struct {
-	codec addresscodec.Codec
+	codec address.Codec
 }
 
 // NewBech32AddressCodec creates a new Bech32 address codec
 func NewBech32AddressCodec(prefix string) AddressCodec {
 	return &Bech32AddressCodec{
-		codec: addresscodec.NewBech32Codec(prefix),
+		codec: address.NewBech32Codec(prefix),
 	}
 }
 
@@ -35,7 +35,7 @@ func (b *Bech32AddressCodec) BytesToString(bz []byte) (string, error) {
 }
 
 // GetSDKCodec returns the underlying SDK codec for keyring operations
-func (b *Bech32AddressCodec) GetSDKCodec() addresscodec.Codec {
+func (b *Bech32AddressCodec) GetSDKCodec() address.Codec {
 	return b.codec
 }
 
