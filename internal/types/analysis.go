@@ -3,7 +3,6 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"cosmossdk.io/errors"
