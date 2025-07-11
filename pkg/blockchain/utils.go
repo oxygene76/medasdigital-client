@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	comethttp "github.com/cometbft/cometbft/rpc/client/http"
 	comet "github.com/cometbft/cometbft/rpc/core/types"
+	abci "github.com/cometbft/cometbft/abci/types"
 
 	"github.com/oxygene76/medasdigital-client/internal/types"
 )
@@ -592,9 +594,3 @@ func CreateClientWithDefaults(chainID, rpcEndpoint string) (*Client, error) {
 func GetSDKVersion() string {
 	return "v0.50.10"
 }
-
-// Required import for hex operations
-import "encoding/hex"
-
-// Required import for ABCI types
-import abci "github.com/cometbft/cometbft/abci/types"
