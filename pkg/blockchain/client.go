@@ -8,17 +8,23 @@ import (
 	"strings"
 	"time"
 
+	"cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	"github.com/tendermint/tendermint/rpc/client/http"
-	coretypes "github.com/tendermint/tendermint/rpc/core/types"
+	
+	// CometBFT imports (ersetzt Tendermint)
+	"github.com/cometbft/cometbft/rpc/client/http"
+	coretypes "github.com/cometbft/cometbft/rpc/core/types"
 
 	clienttypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
@@ -170,31 +176,48 @@ func (c *Client) sendTransaction(msg sdk.Msg) (*sdk.TxResponse, error) {
 
 // attemptTransaction attempts to send a single transaction
 func (c *Client) attemptTransaction(msg sdk.Msg) (*sdk.TxResponse, error) {
-	// Create transaction builder
-	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
-
-	// Set messages
-	if err := txBuilder.SetMsgs(msg); err != nil {
-		return nil, fmt.Errorf("failed to set messages: %w", err)
+	// Get account info
+	addr := c.clientCtx.GetFromAddress()
+	if addr.Empty() {
+		return nil, fmt.Errorf("from address not set")
 	}
 
-	// Set gas and fees
-	txBuilder.SetGasLimit(c.gasLimit)
-	
-	// Parse fee
-	fee, err := sdk.ParseCoinsNormalized(fmt.Sprintf("%d%s", c.gasLimit/100, "medas"))
+	// Create transaction factory (new in v0.50)
+	txFactory := tx.Factory{}.
+		WithAccountRetriever(c.clientCtx.AccountRetriever).
+		WithChainID(c.clientCtx.ChainID).
+		WithTxConfig(c.clientCtx.TxConfig).
+		WithGasAdjustment(1.2).
+		WithGasPrices(c.gasPrice).
+		WithKeybase(c.clientCtx.Keyring).
+		WithSignMode(signing.SignMode_SIGN_MODE_DIRECT)
+
+	// Build transaction
+	txBuilder, err := txFactory.BuildUnsignedTx(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse fees: %w", err)
+		return nil, fmt.Errorf("failed to build unsigned transaction: %w", err)
 	}
-	txBuilder.SetFeeAmount(fee)
 
-	// Broadcast transaction using client context
+	// Set gas limit
+	txBuilder.SetGasLimit(c.gasLimit)
+
+	// Calculate fees
+	fees := sdk.NewCoins(sdk.NewCoin("medas", math.NewInt(int64(c.gasLimit/100))))
+	txBuilder.SetFeeAmount(fees)
+
+	// Sign transaction
+	err = tx.Sign(context.Background(), txFactory, c.clientCtx.GetFromName(), txBuilder, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign transaction: %w", err)
+	}
+
+	// Broadcast transaction
 	txBytes, err := c.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode transaction: %w", err)
 	}
 
-	// Send transaction
+	// Send transaction (updated for v0.50)
 	res, err := c.clientCtx.BroadcastTx(txBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to broadcast transaction: %w", err)
@@ -213,8 +236,8 @@ func (c *Client) extractClientIDFromEvents(events []sdk.Event) (string, error) {
 	for _, event := range events {
 		if event.Type == "register_client" {
 			for _, attr := range event.Attributes {
-				if string(attr.Key) == "client_id" {
-					return string(attr.Value), nil
+				if attr.Key == "client_id" {
+					return attr.Value, nil
 				}
 			}
 		}
@@ -224,8 +247,8 @@ func (c *Client) extractClientIDFromEvents(events []sdk.Event) (string, error) {
 
 // GetClient retrieves client information by ID
 func (c *Client) GetClient(clientID string) (*clienttypes.RegisteredClient, error) {
-	// Query client registry module
-	queryPath := fmt.Sprintf("custom/clientregistry/client/%s", clientID)
+	// Updated query path for v0.50
+	queryPath := fmt.Sprintf("/custom/clientregistry/client/%s", clientID)
 	
 	res, _, err := c.clientCtx.QueryWithData(queryPath, nil)
 	if err != nil {
@@ -242,7 +265,7 @@ func (c *Client) GetClient(clientID string) (*clienttypes.RegisteredClient, erro
 
 // GetAnalysisResults retrieves analysis results for a client
 func (c *Client) GetAnalysisResults(clientID string, limit int) ([]*clienttypes.StoredAnalysis, error) {
-	queryPath := fmt.Sprintf("custom/clientregistry/analysis/%s", clientID)
+	queryPath := fmt.Sprintf("/custom/clientregistry/analysis/%s", clientID)
 	queryData := map[string]interface{}{
 		"limit": limit,
 	}
@@ -283,7 +306,7 @@ func (c *Client) Query(queryType, queryID string) (interface{}, error) {
 
 // GetAnalysisById retrieves a specific analysis by ID
 func (c *Client) GetAnalysisById(analysisID string) (*clienttypes.StoredAnalysis, error) {
-	queryPath := fmt.Sprintf("custom/clientregistry/analysis_by_id/%s", analysisID)
+	queryPath := fmt.Sprintf("/custom/clientregistry/analysis_by_id/%s", analysisID)
 	
 	res, _, err := c.clientCtx.QueryWithData(queryPath, nil)
 	if err != nil {
@@ -394,22 +417,29 @@ func (c *Client) WaitForTransaction(txHash string, timeout time.Duration) (*core
 
 // EstimateGas estimates gas for a transaction
 func (c *Client) EstimateGas(msg sdk.Msg) (uint64, error) {
-	// Create a dry-run transaction
-	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
-	if err := txBuilder.SetMsgs(msg); err != nil {
-		return 0, fmt.Errorf("failed to set messages: %w", err)
+	// Create transaction factory for gas estimation
+	txFactory := tx.Factory{}.
+		WithAccountRetriever(c.clientCtx.AccountRetriever).
+		WithChainID(c.clientCtx.ChainID).
+		WithTxConfig(c.clientCtx.TxConfig).
+		WithKeybase(c.clientCtx.Keyring).
+		WithSignMode(signing.SignMode_SIGN_MODE_DIRECT)
+
+	// Build unsigned transaction
+	_, adjusted, err := tx.CalculateGas(c.clientCtx, txFactory, msg)
+	if err != nil {
+		// Fallback to fixed estimates if simulation fails
+		switch msg.Type() {
+		case "register_client":
+			return 150000, nil
+		case "store_analysis":
+			return 200000, nil
+		default:
+			return 100000, nil
+		}
 	}
 
-	// For now, return a fixed estimate
-	// In a real implementation, you would simulate the transaction
-	switch msg.Type() {
-	case "register_client":
-		return 150000, nil
-	case "store_analysis":
-		return 200000, nil
-	default:
-		return 100000, nil
-	}
+	return adjusted, nil
 }
 
 // Helper functions
