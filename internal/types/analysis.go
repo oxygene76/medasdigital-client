@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"cosmossdk.io/errors"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/codec/types"
 )
 
 // AnalysisResult represents the result of an astronomical analysis
