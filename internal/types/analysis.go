@@ -168,16 +168,38 @@ type ValidationMetrics struct {
 	ConfusionMatrix [][]int `json:"confusion_matrix,omitempty"`
 }
 
+// GPUDevice represents a single GPU device
+type GPUDevice struct {
+	ID                int     `json:"id"`
+	Name              string  `json:"name"`
+	Memory            int64   `json:"memory"`            // bytes
+	MemoryUsed        int64   `json:"memory_used"`       // bytes
+	MemoryFree        int64   `json:"memory_free"`       // bytes
+	Temperature       float64 `json:"temperature"`       // Celsius
+	Utilization       float64 `json:"utilization"`       // percentage
+	MemoryUtilization float64 `json:"memory_utilization"` // percentage
+	PowerDraw         float64 `json:"power_draw"`        // watts
+	MaxPowerDraw      float64 `json:"max_power_draw"`    // watts
+	ClockSpeed        int     `json:"clock_speed"`       // MHz
+	MemoryClockSpeed  int     `json:"memory_clock_speed"` // MHz
+	ComputeCapability string  `json:"compute_capability"`
+	IsAvailable       bool    `json:"is_available"`
+}
+
 // GPUInfo represents GPU information and capabilities
 type GPUInfo struct {
-	Name            string  `json:"name"`
-	Memory          int64   `json:"memory"`          // bytes
-	MemoryUsed      int64   `json:"memory_used"`     // bytes
-	Temperature     float64 `json:"temperature"`     // Celsius
-	Utilization     float64 `json:"utilization"`     // percentage
-	CUDAVersion     string  `json:"cuda_version"`
-	DriverVersion   string  `json:"driver_version"`
-	ComputeCapability string `json:"compute_capability"`
+	Name                string      `json:"name"`
+	Memory              int64       `json:"memory"`          // bytes
+	MemoryUsed          int64       `json:"memory_used"`     // bytes
+	Temperature         float64     `json:"temperature"`     // Celsius
+	Utilization         float64     `json:"utilization"`     // percentage
+	CUDAVersion         string      `json:"cuda_version"`
+	DriverVersion       string      `json:"driver_version"`
+	ComputeCapability   string      `json:"compute_capability"`
+	DeviceCount         int         `json:"device_count"`         // Number of GPU devices
+	Devices             []GPUDevice `json:"devices"`              // Individual GPU devices
+	TotalMemoryGB       float64     `json:"total_memory_gb"`      // Total memory across all devices
+	AvailableMemoryGB   float64     `json:"available_memory_gb"`  // Available memory across all devices
 }
 
 // Capabilities represents client capabilities
@@ -358,4 +380,32 @@ func generateResultID() string {
 	return fmt.Sprintf("result_%d_%s", 
 		time.Now().Unix(), 
 		strings.ToLower(fmt.Sprintf("%x", time.Now().UnixNano())[:8]))
+}
+
+// RegisteredClient represents a registered client on the blockchain
+type RegisteredClient struct {
+	ID           string                 `json:"id"`
+	Creator      string                 `json:"creator"`
+	Capabilities []string               `json:"capabilities"`
+	Metadata     string                 `json:"metadata"`
+	RegisteredAt time.Time              `json:"registered_at"`
+	Status       string                 `json:"status"`
+	LastActive   time.Time              `json:"last_active,omitempty"`
+	TotalAnalyses int64                 `json:"total_analyses"`
+	Reputation   float64                `json:"reputation,omitempty"`
+}
+
+// StoredAnalysis represents analysis data stored on the blockchain
+type StoredAnalysis struct {
+	ID           string                 `json:"id"`
+	ClientID     string                 `json:"client_id"`
+	Creator      string                 `json:"creator"`
+	AnalysisType string                 `json:"analysis_type"`
+	Data         map[string]interface{} `json:"data"`
+	BlockHeight  int64                  `json:"block_height"`
+	TxHash       string                 `json:"tx_hash"`
+	Timestamp    time.Time              `json:"timestamp"`
+	Status       string                 `json:"status"`
+	Verified     bool                   `json:"verified"`
+	VerifiedBy   []string               `json:"verified_by,omitempty"`
 }
