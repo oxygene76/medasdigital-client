@@ -168,17 +168,7 @@ type ValidationMetrics struct {
 	ConfusionMatrix [][]int `json:"confusion_matrix,omitempty"`
 }
 
-// GPUInfo represents GPU information
-type GPUInfo struct {
-	DeviceCount         int         `json:"device_count"`
-	Devices            []GPUDevice `json:"devices"`
-	TotalMemoryGB      float64     `json:"total_memory_gb"`
-	AvailableMemoryGB  float64     `json:"available_memory_gb"`
-	CUDAVersion        string      `json:"cuda_version"`
-	DriverVersion      string      `json:"driver_version"`
-	IsInitialized      bool        `json:"is_initialized"`
-	Timestamp          time.Time   `json:"timestamp"`
-}
+
 
 // GPUDevice represents a single GPU device
 type GPUDevice struct {
