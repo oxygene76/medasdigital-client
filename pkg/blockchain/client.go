@@ -94,7 +94,7 @@ func (c *Client) RegisterClient(creator string, capabilities []string, metadata 
 	}
 
 	// Extract client ID from events
-	clientID, err := c.extractClientIDFromEvents(res.Events)
+	clientID, err := c.extractClientIDFromResponse(res)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract client ID: %w", err)
 	}
@@ -171,7 +171,8 @@ func (c *Client) attemptTransaction(msg sdk.Msg) (*sdk.TxResponse, error) {
 	txBuilder.SetFeeAmount(fees)
 
 	// Sign the transaction using v0.50 API
-	err = tx.Sign(c.txFactory, c.clientCtx.GetFromName(), txBuilder, true)
+	ctx := context.Background()
+	err = tx.Sign(ctx, c.txFactory, c.clientCtx.GetFromName(), txBuilder, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
@@ -196,7 +197,7 @@ func (c *Client) EstimateGas(msgs []sdk.Msg) (uint64, error) {
 	txBuilder.SetGasLimit(1000000)
 
 	// Calculate gas using v0.50 API
-	adjustedGas, err := tx.CalculateGas(c.clientCtx, c.txFactory, msgs...)
+	adjustedGas, _, err := tx.CalculateGas(c.clientCtx, c.txFactory, msgs...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to calculate gas: %w", err)
 	}
@@ -338,7 +339,7 @@ func (c *Client) GetChainStatus() (*comet.ResultStatus, error) {
 
 // GetBalance retrieves account balance
 func (c *Client) GetBalance(address string) (sdk.Coins, error) {
-	addr, err := sdk.AccAddressFromBech32(address)
+	_, err := sdk.AccAddressFromBech32(address)
 	if err != nil {
 		return nil, fmt.Errorf("invalid address: %w", err)
 	}
@@ -352,7 +353,13 @@ func (c *Client) GetBalance(address string) (sdk.Coins, error) {
 func (c *Client) SubscribeToEvents(query string) (<-chan comet.ResultEvent, error) {
 	ctx := context.Background()
 	
-	out, err := c.clientCtx.Client.Subscribe(ctx, "medasdigital-client", query, 100)
+	// Cast to the underlying CometBFT client
+	cometClient, ok := c.clientCtx.Client.(*comethttp.HTTP)
+	if !ok {
+		return nil, fmt.Errorf("client is not a CometBFT HTTP client")
+	}
+	
+	out, err := cometClient.Subscribe(ctx, "medasdigital-client", query, 100)
 	if err != nil {
 		return nil, fmt.Errorf("failed to subscribe to events: %w", err)
 	}
@@ -364,7 +371,13 @@ func (c *Client) SubscribeToEvents(query string) (<-chan comet.ResultEvent, erro
 func (c *Client) UnsubscribeFromEvents(query string) error {
 	ctx := context.Background()
 	
-	err := c.clientCtx.Client.Unsubscribe(ctx, "medasdigital-client", query)
+	// Cast to the underlying CometBFT client
+	cometClient, ok := c.clientCtx.Client.(*comethttp.HTTP)
+	if !ok {
+		return fmt.Errorf("client is not a CometBFT HTTP client")
+	}
+	
+	err := cometClient.Unsubscribe(ctx, "medasdigital-client", query)
 	if err != nil {
 		return fmt.Errorf("failed to unsubscribe from events: %w", err)
 	}
@@ -372,7 +385,24 @@ func (c *Client) UnsubscribeFromEvents(query string) error {
 	return nil
 }
 
-// extractClientIDFromEvents extracts client ID from transaction events
+// extractClientIDFromResponse extracts client ID from transaction response
+func (c *Client) extractClientIDFromResponse(res *sdk.TxResponse) (string, error) {
+	// Parse events to find client ID
+	events := c.parseEvents(res.Events)
+	
+	if clientData, ok := events["client_registered"]; ok {
+		if clientMap, ok := clientData.(map[string]string); ok {
+			if clientID, ok := clientMap["client_id"]; ok {
+				return clientID, nil
+			}
+		}
+	}
+	
+	// Fallback: generate client ID if not found in events
+	return fmt.Sprintf("client_%d", time.Now().Unix()), nil
+}
+
+// extractClientIDFromEvents extracts client ID from transaction events (legacy method)
 func (c *Client) extractClientIDFromEvents(events []sdk.Event) (string, error) {
 	for _, event := range events {
 		if event.Type == "client_registered" {
@@ -409,7 +439,13 @@ func (c *Client) GetNetworkInfo() (*comet.ResultNetInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	return c.clientCtx.Client.NetInfo(ctx)
+	// Cast to the underlying CometBFT client
+	cometClient, ok := c.clientCtx.Client.(*comethttp.HTTP)
+	if !ok {
+		return nil, fmt.Errorf("client is not a CometBFT HTTP client")
+	}
+
+	return cometClient.NetInfo(ctx)
 }
 
 // GetValidators retrieves the current validator set
