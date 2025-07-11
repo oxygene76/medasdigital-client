@@ -132,8 +132,12 @@ func (m *Manager) detectCUDADevices() error {
 func (m *Manager) getDeviceCount() int {
 	// In a real implementation, this would call cudaGetDeviceCount()
 	// For simulation, return configured device count or detect based on system
-	if m.config.Enabled && len(m.config.Devices) > 0 {
-		return len(m.config.Devices) // Use configured devices
+	if m.config.Enabled {
+		// Use configured device count or default to 1
+		if m.config.DeviceCount > 0 {
+			return m.config.DeviceCount
+		}
+		return 1 // Default to 1 device if enabled but count not specified
 	}
 	
 	// Simulate detection based on system capabilities
@@ -214,12 +218,9 @@ func (m *Manager) getPrimaryDevice() *types.GPUDevice {
 		return nil
 	}
 
-	// If specific devices configured, use first configured device
-	if m.config.Enabled && len(m.config.Devices) > 0 {
-		deviceID := m.config.Devices[0]
-		if deviceID >= 0 && deviceID < len(m.devices) {
-			return m.devices[deviceID]
-		}
+	// If specific device configured, use that device
+	if m.config.Enabled && m.config.DeviceID >= 0 && m.config.DeviceID < len(m.devices) {
+		return m.devices[m.config.DeviceID]
 	}
 
 	// Otherwise use first available device
