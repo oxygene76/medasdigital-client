@@ -10,7 +10,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/address"
+	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
@@ -18,7 +18,7 @@ import (
 	comet "github.com/cometbft/cometbft/rpc/core/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 
-	"github.com/oxygene76/medasdigital-client/internal/types"
+	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
 
 // ClientBuilder helps create blockchain clients with proper configuration
@@ -28,7 +28,7 @@ type ClientBuilder struct {
 	keyringBackend  string
 	keyringDir      string
 	bech32Prefix    string
-	addressCodec    address.Codec
+	addressCodec    AddressCodec
 }
 
 // NewClientBuilder creates a new client builder
@@ -39,7 +39,7 @@ func NewClientBuilder(config interface{}) *ClientBuilder {
 		keyringBackend: keyring.BackendOS,
 		keyringDir:     "",
 		bech32Prefix:   "medas",
-		addressCodec:   address.NewBech32Codec("medas"),
+		addressCodec:   NewBech32AddressCodec("medas"),
 	}
 }
 
@@ -65,7 +65,7 @@ func (cb *ClientBuilder) WithKeyring(backend, dir string) *ClientBuilder {
 // WithBech32Prefix sets the bech32 prefix and creates address codec
 func (cb *ClientBuilder) WithBech32Prefix(prefix string) *ClientBuilder {
 	cb.bech32Prefix = prefix
-	cb.addressCodec = address.NewBech32Codec(prefix)
+	cb.addressCodec = NewBech32AddressCodec(prefix)
 	return cb
 }
 
@@ -82,7 +82,8 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
 	// Create keyring (v0.50 compatible)
-	kr, err := keyring.New(sdk.KeyringServiceName(), cb.keyringBackend, cb.keyringDir, nil, cb.addressCodec)
+	realAddressCodec := NewBech32AddressCodec(cb.bech32Prefix)
+	kr, err := keyring.New(sdk.KeyringServiceName(), cb.keyringBackend, cb.keyringDir, nil, realAddressCodec.(*Bech32AddressCodec).codec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create keyring: %w", err)
 	}
@@ -98,9 +99,9 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 		WithChainID(cb.chainID).
 		WithKeyring(kr).
 		WithClient(rpcClient).
-		WithAddressCodec(cb.addressCodec).
-		WithValidatorAddressCodec(address.NewBech32Codec(cb.bech32Prefix + "valoper")).
-		WithConsensusAddressCodec(address.NewBech32Codec(cb.bech32Prefix + "valcons"))
+		WithAddressCodec(realAddressCodec.(*Bech32AddressCodec).codec).
+		WithValidatorAddressCodec(NewBech32AddressCodec(cb.bech32Prefix + "valoper").(*Bech32AddressCodec).codec).
+		WithConsensusAddressCodec(NewBech32AddressCodec(cb.bech32Prefix + "valcons").(*Bech32AddressCodec).codec)
 
 	return NewClient(clientCtx), nil
 }
@@ -108,11 +109,11 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 // KeyManager manages keyring operations
 type KeyManager struct {
 	keyring      keyring.Keyring
-	addressCodec address.Codec
+	addressCodec AddressCodec
 }
 
 // NewKeyManager creates a new key manager
-func NewKeyManager(kr keyring.Keyring, codec address.Codec) *KeyManager {
+func NewKeyManager(kr keyring.Keyring, codec AddressCodec) *KeyManager {
 	return &KeyManager{
 		keyring:      kr,
 		addressCodec: codec,
@@ -380,11 +381,11 @@ func (th *TransactionHelper) BatchTransactions(msgs []sdk.Msg, signerName string
 
 // AddressValidator provides address validation and conversion utilities
 type AddressValidator struct {
-	addressCodec address.Codec
+	addressCodec AddressCodec
 }
 
 // NewAddressValidator creates a new address validator
-func NewAddressValidator(codec address.Codec) *AddressValidator {
+func NewAddressValidator(codec AddressCodec) *AddressValidator {
 	return &AddressValidator{
 		addressCodec: codec,
 	}
@@ -423,10 +424,10 @@ func NewEventParser() *EventParser {
 }
 
 // ParseClientRegistrationEvent parses client registration events
-func (ep *EventParser) ParseClientRegistrationEvent(events []abci.Event) (*types.RegisteredClient, error) {
+func (ep *EventParser) ParseClientRegistrationEvent(events []abci.Event) (*itypes.RegisteredClient, error) {
 	for _, event := range events {
 		if event.Type == "client_registered" {
-			var client types.RegisteredClient
+			var client itypes.RegisteredClient
 			
 			for _, attr := range event.Attributes {
 				key := string(attr.Key)
@@ -454,10 +455,10 @@ func (ep *EventParser) ParseClientRegistrationEvent(events []abci.Event) (*types
 }
 
 // ParseAnalysisStoredEvent parses analysis stored events
-func (ep *EventParser) ParseAnalysisStoredEvent(events []abci.Event) (*types.StoredAnalysis, error) {
+func (ep *EventParser) ParseAnalysisStoredEvent(events []abci.Event) (*itypes.StoredAnalysis, error) {
 	for _, event := range events {
 		if event.Type == "analysis_stored" {
-			var analysis types.StoredAnalysis
+			var analysis itypes.StoredAnalysis
 			
 			for _, attr := range event.Attributes {
 				key := string(attr.Key)
