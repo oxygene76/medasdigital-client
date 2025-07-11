@@ -21,6 +21,12 @@ import (
 	"github.com/oxygene76/medasdigital-client/internal/types"
 )
 
+// AddressCodec interface for v0.50 compatibility
+type AddressCodec interface {
+	StringToBytes(text string) ([]byte, error)
+	BytesToString(bz []byte) (string, error)
+}
+
 // ClientBuilder helps create blockchain clients with proper configuration
 type ClientBuilder struct {
 	chainID         string
@@ -28,7 +34,7 @@ type ClientBuilder struct {
 	keyringBackend  string
 	keyringDir      string
 	bech32Prefix    string
-	addressCodec    address.Codec
+	addressCodec    AddressCodec
 }
 
 // NewClientBuilder creates a new client builder
@@ -81,7 +87,7 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 	interfaceRegistry := codec.NewInterfaceRegistry()
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
-	// Create keyring
+	// Create keyring (v0.50 compatible)
 	kr, err := keyring.New(sdk.KeyringServiceName(), cb.keyringBackend, cb.keyringDir, nil, cb.addressCodec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create keyring: %w", err)
@@ -108,11 +114,11 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 // KeyManager manages keyring operations
 type KeyManager struct {
 	keyring      keyring.Keyring
-	addressCodec address.Codec
+	addressCodec AddressCodec
 }
 
 // NewKeyManager creates a new key manager
-func NewKeyManager(kr keyring.Keyring, codec address.Codec) *KeyManager {
+func NewKeyManager(kr keyring.Keyring, codec AddressCodec) *KeyManager {
 	return &KeyManager{
 		keyring:      kr,
 		addressCodec: codec,
@@ -380,11 +386,11 @@ func (th *TransactionHelper) BatchTransactions(msgs []sdk.Msg, signerName string
 
 // AddressValidator provides address validation and conversion utilities
 type AddressValidator struct {
-	addressCodec address.Codec
+	addressCodec AddressCodec
 }
 
 // NewAddressValidator creates a new address validator
-func NewAddressValidator(codec address.Codec) *AddressValidator {
+func NewAddressValidator(codec AddressCodec) *AddressValidator {
 	return &AddressValidator{
 		addressCodec: codec,
 	}
