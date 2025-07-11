@@ -71,13 +71,14 @@ func (c *MedasDigitalClient) initializeBlockchainClient() error {
 	interfaceRegistry := types.NewInterfaceRegistry()
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
-	// Address codecs - required for 0.50
-	addressCodec := address.NewBech32Codec(c.config.Chain.Bech32Prefix)
-	validatorAddressCodec := address.NewBech32Codec(c.config.Chain.Bech32Prefix + "valoper")
-	consensusAddressCodec := address.NewBech32Codec(c.config.Chain.Bech32Prefix + "valcons")
+	// Address codecs - required for v0.50
+	addressCodec := address.NewBech32Codec("medas")
+	validatorAddressCodec := address.NewBech32Codec("medasvaloper")
+	consensusAddressCodec := address.NewBech32Codec("medasvalcons")
 
-	// Keyring setup
-	kr, err := keyring.New(sdk.KeyringServiceName(), keyring.BackendOS, c.config.Client.KeyringDir, nil, addressCodec)
+	// Keyring setup with address codec (v0.50 requirement)
+	kr, err := keyring.New(sdk.KeyringServiceName(), keyring.BackendOS, 
+		c.config.Client.KeyringDir, nil, addressCodec)
 	if err != nil {
 		return fmt.Errorf("failed to create keyring: %w", err)
 	}
@@ -88,7 +89,7 @@ func (c *MedasDigitalClient) initializeBlockchainClient() error {
 		return fmt.Errorf("failed to create RPC client: %w", err)
 	}
 
-	// Client Context setup with address codecs
+	// Client Context setup with address codecs (v0.50 requirement)
 	c.clientCtx = client.Context{}.
 		WithCodec(marshaler).
 		WithInterfaceRegistry(interfaceRegistry).
@@ -123,21 +124,17 @@ func (c *MedasDigitalClient) Register(capabilities []string, metadata, from stri
 
 	c.clientCtx = c.clientCtx.WithFromAddress(addr).WithFromName(from)
 
-	// Create registration message
-	msg := &types.MsgRegisterClient{
-		Creator:      addr.String(),
-		Capabilities: capabilities,
-		Metadata:     c.generateMetadata(metadata),
-	}
-
-	// Send transaction
-	res, err := c.sendTransaction(msg)
+	// Use the blockchain client to register
+	clientID, err := c.blockchain.RegisterClient(
+		addr.String(),
+		capabilities,
+		c.generateMetadata(metadata),
+	)
 	if err != nil {
-		return fmt.Errorf("failed to send registration transaction: %w", err)
+		return fmt.Errorf("failed to register client: %w", err)
 	}
 
-	// Extract client ID from response
-	c.clientID = c.extractClientID(res)
+	c.clientID = clientID
 	c.capabilities = capabilities
 	c.isRegistered = true
 
@@ -152,6 +149,8 @@ func (c *MedasDigitalClient) generateMetadata(userMetadata string) string {
 		"created_at":    time.Now().Format(time.RFC3339),
 		"user_metadata": userMetadata,
 		"gpu_enabled":   c.config.GPU.Enabled,
+		"sdk_version":   "v0.50.10",
+		"client_type":   "astronomical_analysis",
 	}
 
 	if c.gpuManager != nil {
@@ -161,24 +160,6 @@ func (c *MedasDigitalClient) generateMetadata(userMetadata string) string {
 
 	data, _ := json.Marshal(metadata)
 	return string(data)
-}
-
-func (c *MedasDigitalClient) sendTransaction(msg sdk.Msg) (*sdk.TxResponse, error) {
-	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
-	if err := txBuilder.SetMsgs(msg); err != nil {
-		return nil, err
-	}
-
-	// Set gas and fees (simplified)
-	txBuilder.SetGasLimit(200000)
-
-	return tx.BroadcastTx(c.clientCtx, txBuilder.GetTx())
-}
-
-func (c *MedasDigitalClient) extractClientID(res *sdk.TxResponse) string {
-	// Extract client ID from transaction events
-	// This is a simplified implementation
-	return fmt.Sprintf("client_%s_%d", res.TxHash[:8], time.Now().Unix())
 }
 
 // AnalyzeOrbitalDynamics performs orbital dynamics analysis
@@ -194,7 +175,7 @@ func (c *MedasDigitalClient) AnalyzeOrbitalDynamics(inputFile, outputFile string
 		return fmt.Errorf("orbital dynamics analysis failed: %w", err)
 	}
 
-	// Store results on blockchain
+	// Store results on blockchain using the blockchain client
 	if err := c.storeAnalysisResult(result); err != nil {
 		return fmt.Errorf("failed to store results: %w", err)
 	}
@@ -328,8 +309,8 @@ func (c *MedasDigitalClient) Status() error {
 	fmt.Printf("Chain ID: %s\n", c.config.Chain.ID)
 	fmt.Printf("RPC Endpoint: %s\n", c.config.Chain.RPCEndpoint)
 
-	// Blockchain status
-	status, err := c.clientCtx.Client.Status(context.Background())
+	// Blockchain status using the blockchain client
+	status, err := c.blockchain.GetChainStatus()
 	if err != nil {
 		fmt.Printf("Blockchain Status: ERROR - %v\n", err)
 	} else {
@@ -417,17 +398,15 @@ func (c *MedasDigitalClient) storeAnalysisResult(result *types.AnalysisResult) e
 		return fmt.Errorf("client not registered")
 	}
 
-	msg := &types.MsgStoreAnalysis{
-		Creator:      c.clientCtx.GetFromAddress().String(),
-		ClientID:     c.clientID,
-		AnalysisType: result.Type,
-		Data:         result.Results,
-		BlockHeight:  result.BlockHeight,
-		TxHash:       result.TxHash,
-	}
-
-	_, err := c.sendTransaction(msg)
-	return err
+	// Use blockchain client to store results
+	return c.blockchain.StoreAnalysisResult(
+		c.clientCtx.GetFromAddress().String(),
+		c.clientID,
+		result.Type,
+		result.Results,
+		result.BlockHeight,
+		result.TxHash,
+	)
 }
 
 func (c *MedasDigitalClient) saveResults(result *types.AnalysisResult, outputFile string) error {
