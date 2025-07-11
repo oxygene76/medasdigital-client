@@ -5,7 +5,6 @@ import (
 	"log"
 	"math/rand"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
@@ -133,8 +132,8 @@ func (m *Manager) detectCUDADevices() error {
 func (m *Manager) getDeviceCount() int {
 	// In a real implementation, this would call cudaGetDeviceCount()
 	// For simulation, return configured device count or detect based on system
-	if m.config.DeviceID >= 0 {
-		return 1 // Use single specified device
+	if m.config.Enabled && len(m.config.Devices) > 0 {
+		return len(m.config.Devices) // Use configured devices
 	}
 	
 	// Simulate detection based on system capabilities
@@ -215,9 +214,12 @@ func (m *Manager) getPrimaryDevice() *types.GPUDevice {
 		return nil
 	}
 
-	// If specific device ID configured, use that
-	if m.config.DeviceID >= 0 && m.config.DeviceID < len(m.devices) {
-		return m.devices[m.config.DeviceID]
+	// If specific devices configured, use first configured device
+	if m.config.Enabled && len(m.config.Devices) > 0 {
+		deviceID := m.config.Devices[0]
+		if deviceID >= 0 && deviceID < len(m.devices) {
+			return m.devices[deviceID]
+		}
 	}
 
 	// Otherwise use first available device
