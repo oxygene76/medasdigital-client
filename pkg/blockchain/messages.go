@@ -1,50 +1,96 @@
 package blockchain
 
 import (
-	"encoding/json"
 	"fmt"
+	"strings"
 
 	"cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "cosmossdk.io/errors"
+	"github.com/cosmos/gogoproto/proto"
 )
 
+// Ensure all messages implement the required interfaces
+var (
+	_ sdk.Msg       = (*MsgRegisterClient)(nil)
+	_ proto.Message = (*MsgRegisterClient)(nil)
+	_ sdk.Msg       = (*MsgStoreAnalysis)(nil)
+	_ proto.Message = (*MsgStoreAnalysis)(nil)
+	_ sdk.Msg       = (*MsgUpdateClient)(nil)
+	_ proto.Message = (*MsgUpdateClient)(nil)
+	_ sdk.Msg       = (*MsgDeactivateClient)(nil)
+	_ proto.Message = (*MsgDeactivateClient)(nil)
+)
+
+// Error definitions
+var (
+	ErrInvalidMessage     = errors.Register("blockchain", 1, "invalid message")
+	ErrInvalidAddress     = errors.Register("blockchain", 2, "invalid address")
+	ErrInvalidCapability  = errors.Register("blockchain", 3, "invalid capability")
+	ErrInvalidAnalysisType = errors.Register("blockchain", 4, "invalid analysis type")
+)
+
+// Message type constants
 const (
-	// Module name
-	ModuleName = "clientregistry"
-	
-	// Message types
 	TypeMsgRegisterClient   = "register_client"
 	TypeMsgStoreAnalysis    = "store_analysis"
 	TypeMsgUpdateClient     = "update_client"
 	TypeMsgDeactivateClient = "deactivate_client"
 )
 
-// MsgRegisterClient defines a message for registering a new analysis client
+// Route constants
+const (
+	ModuleName = "clientregistry"
+)
+
+// MsgRegisterClient defines the message for registering a new client
 type MsgRegisterClient struct {
-	Creator      string   `json:"creator" yaml:"creator"`
-	Capabilities []string `json:"capabilities" yaml:"capabilities"`
-	Metadata     string   `json:"metadata" yaml:"metadata"`
+	Creator      string   `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator,omitempty"`
+	Capabilities []string `protobuf:"bytes,2,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	Metadata     string   `protobuf:"bytes,3,opt,name=metadata,proto3" json:"metadata,omitempty"`
 }
 
-// NewMsgRegisterClient creates a new MsgRegisterClient
-func NewMsgRegisterClient(creator string, capabilities []string, metadata string) *MsgRegisterClient {
-	return &MsgRegisterClient{
-		Creator:      creator,
-		Capabilities: capabilities,
-		Metadata:     metadata,
-	}
+// Route implements sdk.Msg interface (legacy)
+func (msg *MsgRegisterClient) Route() string {
+	return ModuleName
 }
 
-// ValidateBasic validates the message (updated for v0.50)
-func (msg *MsgRegisterClient) ValidateBasic() error {
-	_, err := sdk.AccAddressFromBech32(msg.Creator)
+// Type implements sdk.Msg interface (legacy)
+func (msg *MsgRegisterClient) Type() string {
+	return TypeMsgRegisterClient
+}
+
+// GetSigners implements sdk.Msg interface
+func (msg *MsgRegisterClient) GetSigners() []sdk.AccAddress {
+	creator, err := sdk.AccAddressFromBech32(msg.Creator)
 	if err != nil {
-		return errors.Wrapf(sdkerrors.ErrInvalidAddress, "invalid creator address (%s)", err)
+		panic(err)
+	}
+	return []sdk.AccAddress{creator}
+}
+
+// GetSignersStr returns signers as strings (v0.50 requirement)
+func (msg *MsgRegisterClient) GetSignersStr() ([]string, error) {
+	return []string{msg.Creator}, nil
+}
+
+// GetSignBytes implements sdk.Msg interface (legacy)
+func (msg *MsgRegisterClient) GetSignBytes() []byte {
+	bz := ModuleCdc.MustMarshalJSON(msg)
+	return sdk.MustSortJSON(bz)
+}
+
+// ValidateBasic performs basic validation of the message
+func (msg *MsgRegisterClient) ValidateBasic() error {
+	if msg.Creator == "" {
+		return errors.Wrap(ErrInvalidMessage, "creator cannot be empty")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Creator); err != nil {
+		return errors.Wrapf(ErrInvalidMessage, "invalid creator address: %v", err)
 	}
 
 	if len(msg.Capabilities) == 0 {
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "capabilities cannot be empty")
+		return errors.Wrap(ErrInvalidMessage, "capabilities cannot be empty")
 	}
 
 	// Validate capabilities
@@ -59,115 +105,54 @@ func (msg *MsgRegisterClient) ValidateBasic() error {
 		"gpu_compute":           true,
 	}
 
-	for _, cap := range msg.Capabilities {
-		if !validCapabilities[cap] {
-			return errors.Wrapf(sdkerrors.ErrInvalidRequest, "invalid capability: %s", cap)
+	for _, capability := range msg.Capabilities {
+		if !validCapabilities[capability] {
+			return errors.Wrapf(ErrInvalidMessage, "invalid capability: %s", capability)
 		}
 	}
 
-	if len(msg.Metadata) > 10000 { // 10KB limit
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "metadata too large (max 10KB)")
+	// Validate metadata length
+	if len(msg.Metadata) > 10*1024 { // 10KB limit
+		return errors.Wrap(ErrInvalidMessage, "metadata too large (max 10KB)")
 	}
 
 	return nil
 }
 
-// GetSigners returns the required signers (updated for v0.50)
-func (msg *MsgRegisterClient) GetSigners() []sdk.AccAddress {
-	creator, err := sdk.AccAddressFromBech32(msg.Creator)
-	if err != nil {
-		panic(err)
-	}
-	return []sdk.AccAddress{creator}
+// ProtoMessage implements proto.Message interface
+func (msg *MsgRegisterClient) ProtoMessage() {}
+
+// Reset implements proto.Message interface
+func (msg *MsgRegisterClient) Reset() {
+	*msg = MsgRegisterClient{}
 }
 
-// Type returns the message type (legacy method for v0.50 compatibility)
-func (msg *MsgRegisterClient) Type() string {
-	return TypeMsgRegisterClient
+// String implements proto.Message interface
+func (msg *MsgRegisterClient) String() string {
+	return fmt.Sprintf("MsgRegisterClient{Creator: %s, Capabilities: %v}", msg.Creator, msg.Capabilities)
 }
 
-// Route returns the message route (legacy method for v0.50 compatibility)
-func (msg *MsgRegisterClient) Route() string {
+// MsgStoreAnalysis defines the message for storing analysis results
+type MsgStoreAnalysis struct {
+	Creator      string `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator,omitempty"`
+	ClientID     string `protobuf:"bytes,2,opt,name=client_id,proto3" json:"client_id,omitempty"`
+	AnalysisType string `protobuf:"bytes,3,opt,name=analysis_type,proto3" json:"analysis_type,omitempty"`
+	Data         string `protobuf:"bytes,4,opt,name=data,proto3" json:"data,omitempty"`
+	BlockHeight  int64  `protobuf:"varint,5,opt,name=block_height,proto3" json:"block_height,omitempty"`
+	TxHash       string `protobuf:"bytes,6,opt,name=tx_hash,proto3" json:"tx_hash,omitempty"`
+}
+
+// Route implements sdk.Msg interface (legacy)
+func (msg *MsgStoreAnalysis) Route() string {
 	return ModuleName
 }
 
-// GetSignBytes returns the message bytes to sign over (legacy method)
-func (msg *MsgRegisterClient) GetSignBytes() []byte {
-	bz, _ := json.Marshal(msg)
-	return sdk.MustSortJSON(bz)
+// Type implements sdk.Msg interface (legacy)
+func (msg *MsgStoreAnalysis) Type() string {
+	return TypeMsgStoreAnalysis
 }
 
-// MsgStoreAnalysis defines a message for storing analysis results
-type MsgStoreAnalysis struct {
-	Creator      string                 `json:"creator" yaml:"creator"`
-	ClientID     string                 `json:"client_id" yaml:"client_id"`
-	AnalysisType string                 `json:"analysis_type" yaml:"analysis_type"`
-	Data         map[string]interface{} `json:"data" yaml:"data"`
-	BlockHeight  int64                  `json:"block_height,omitempty" yaml:"block_height,omitempty"`
-	TxHash       string                 `json:"tx_hash,omitempty" yaml:"tx_hash,omitempty"`
-}
-
-// NewMsgStoreAnalysis creates a new MsgStoreAnalysis
-func NewMsgStoreAnalysis(creator, clientID, analysisType string, data map[string]interface{}, blockHeight int64, txHash string) *MsgStoreAnalysis {
-	return &MsgStoreAnalysis{
-		Creator:      creator,
-		ClientID:     clientID,
-		AnalysisType: analysisType,
-		Data:         data,
-		BlockHeight:  blockHeight,
-		TxHash:       txHash,
-	}
-}
-
-// ValidateBasic validates the message (updated for v0.50)
-func (msg *MsgStoreAnalysis) ValidateBasic() error {
-	_, err := sdk.AccAddressFromBech32(msg.Creator)
-	if err != nil {
-		return errors.Wrapf(sdkerrors.ErrInvalidAddress, "invalid creator address (%s)", err)
-	}
-
-	if len(msg.ClientID) == 0 {
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "client ID cannot be empty")
-	}
-
-	if len(msg.AnalysisType) == 0 {
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "analysis type cannot be empty")
-	}
-
-	// Validate analysis type
-	validTypes := map[string]bool{
-		"orbital_dynamics":      true,
-		"photometric_analysis":  true,
-		"astrometric_validation": true,
-		"clustering_analysis":   true,
-		"survey_processing":     true,
-		"anomaly_detection":     true,
-		"ai_training":          true,
-		"ai_detection":         true,
-	}
-
-	if !validTypes[msg.AnalysisType] {
-		return errors.Wrapf(sdkerrors.ErrInvalidRequest, "invalid analysis type: %s", msg.AnalysisType)
-	}
-
-	if msg.Data == nil || len(msg.Data) == 0 {
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "analysis data cannot be empty")
-	}
-
-	// Check data size (serialize to estimate size)
-	dataBytes, err := json.Marshal(msg.Data)
-	if err != nil {
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "invalid analysis data format")
-	}
-
-	if len(dataBytes) > 1000000 { // 1MB limit
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "analysis data too large (max 1MB)")
-	}
-
-	return nil
-}
-
-// GetSigners returns the required signers (updated for v0.50)
+// GetSigners implements sdk.Msg interface
 func (msg *MsgStoreAnalysis) GetSigners() []sdk.AccAddress {
 	creator, err := sdk.AccAddressFromBech32(msg.Creator)
 	if err != nil {
@@ -176,71 +161,89 @@ func (msg *MsgStoreAnalysis) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{creator}
 }
 
-// Type returns the message type (legacy method for v0.50 compatibility)
-func (msg *MsgStoreAnalysis) Type() string {
-	return TypeMsgStoreAnalysis
+// GetSignersStr returns signers as strings (v0.50 requirement)
+func (msg *MsgStoreAnalysis) GetSignersStr() ([]string, error) {
+	return []string{msg.Creator}, nil
 }
 
-// Route returns the message route (legacy method for v0.50 compatibility)
-func (msg *MsgStoreAnalysis) Route() string {
-	return ModuleName
-}
-
-// GetSignBytes returns the message bytes to sign over (legacy method)
+// GetSignBytes implements sdk.Msg interface (legacy)
 func (msg *MsgStoreAnalysis) GetSignBytes() []byte {
-	bz, _ := json.Marshal(msg)
+	bz := ModuleCdc.MustMarshalJSON(msg)
 	return sdk.MustSortJSON(bz)
 }
 
-// MsgUpdateClient defines a message for updating client information
-type MsgUpdateClient struct {
-	Creator      string   `json:"creator" yaml:"creator"`
-	ClientID     string   `json:"client_id" yaml:"client_id"`
-	Capabilities []string `json:"capabilities,omitempty" yaml:"capabilities,omitempty"`
-	Metadata     string   `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	Status       string   `json:"status,omitempty" yaml:"status,omitempty"`
-}
-
-// NewMsgUpdateClient creates a new MsgUpdateClient
-func NewMsgUpdateClient(creator, clientID string, capabilities []string, metadata, status string) *MsgUpdateClient {
-	return &MsgUpdateClient{
-		Creator:      creator,
-		ClientID:     clientID,
-		Capabilities: capabilities,
-		Metadata:     metadata,
-		Status:       status,
-	}
-}
-
-// ValidateBasic validates the message (updated for v0.50)
-func (msg *MsgUpdateClient) ValidateBasic() error {
-	_, err := sdk.AccAddressFromBech32(msg.Creator)
-	if err != nil {
-		return errors.Wrapf(sdkerrors.ErrInvalidAddress, "invalid creator address (%s)", err)
+// ValidateBasic performs basic validation of the message
+func (msg *MsgStoreAnalysis) ValidateBasic() error {
+	if msg.Creator == "" {
+		return errors.Wrap(ErrInvalidMessage, "creator cannot be empty")
 	}
 
-	if len(msg.ClientID) == 0 {
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "client ID cannot be empty")
+	if _, err := sdk.AccAddressFromBech32(msg.Creator); err != nil {
+		return errors.Wrapf(ErrInvalidMessage, "invalid creator address: %v", err)
 	}
 
-	// Validate status if provided
-	if msg.Status != "" {
-		validStatuses := map[string]bool{
-			"active":     true,
-			"inactive":   true,
-			"suspended":  true,
-			"maintenance": true,
-		}
+	if msg.ClientID == "" {
+		return errors.Wrap(ErrInvalidMessage, "client_id cannot be empty")
+	}
 
-		if !validStatuses[msg.Status] {
-			return errors.Wrapf(sdkerrors.ErrInvalidRequest, "invalid status: %s", msg.Status)
-		}
+	if msg.AnalysisType == "" {
+		return errors.Wrap(ErrInvalidMessage, "analysis_type cannot be empty")
+	}
+
+	// Validate analysis type
+	validTypes := map[string]bool{
+		"orbital_dynamics":  true,
+		"photometric":       true,
+		"clustering":        true,
+		"ai_training":       true,
+		"anomaly_detection": true,
+		"survey_processing": true,
+	}
+
+	if !validTypes[msg.AnalysisType] {
+		return errors.Wrapf(ErrInvalidMessage, "invalid analysis type: %s", msg.AnalysisType)
+	}
+
+	// Validate data length
+	if len(msg.Data) > 1024*1024 { // 1MB limit
+		return errors.Wrap(ErrInvalidMessage, "analysis data too large (max 1MB)")
 	}
 
 	return nil
 }
 
-// GetSigners returns the required signers (updated for v0.50)
+// ProtoMessage implements proto.Message interface
+func (msg *MsgStoreAnalysis) ProtoMessage() {}
+
+// Reset implements proto.Message interface
+func (msg *MsgStoreAnalysis) Reset() {
+	*msg = MsgStoreAnalysis{}
+}
+
+// String implements proto.Message interface
+func (msg *MsgStoreAnalysis) String() string {
+	return fmt.Sprintf("MsgStoreAnalysis{Creator: %s, ClientID: %s, Type: %s}", msg.Creator, msg.ClientID, msg.AnalysisType)
+}
+
+// MsgUpdateClient defines the message for updating client capabilities
+type MsgUpdateClient struct {
+	Creator         string   `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator,omitempty"`
+	ClientID        string   `protobuf:"bytes,2,opt,name=client_id,proto3" json:"client_id,omitempty"`
+	NewCapabilities []string `protobuf:"bytes,3,rep,name=new_capabilities,proto3" json:"new_capabilities,omitempty"`
+	NewMetadata     string   `protobuf:"bytes,4,opt,name=new_metadata,proto3" json:"new_metadata,omitempty"`
+}
+
+// Route implements sdk.Msg interface (legacy)
+func (msg *MsgUpdateClient) Route() string {
+	return ModuleName
+}
+
+// Type implements sdk.Msg interface (legacy)
+func (msg *MsgUpdateClient) Type() string {
+	return TypeMsgUpdateClient
+}
+
+// GetSigners implements sdk.Msg interface
 func (msg *MsgUpdateClient) GetSigners() []sdk.AccAddress {
 	creator, err := sdk.AccAddressFromBech32(msg.Creator)
 	if err != nil {
@@ -249,53 +252,69 @@ func (msg *MsgUpdateClient) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{creator}
 }
 
-// Type returns the message type (legacy method for v0.50 compatibility)
-func (msg *MsgUpdateClient) Type() string {
-	return TypeMsgUpdateClient
+// GetSignersStr returns signers as strings (v0.50 requirement)
+func (msg *MsgUpdateClient) GetSignersStr() ([]string, error) {
+	return []string{msg.Creator}, nil
 }
 
-// Route returns the message route (legacy method for v0.50 compatibility)
-func (msg *MsgUpdateClient) Route() string {
-	return ModuleName
-}
-
-// GetSignBytes returns the message bytes to sign over (legacy method)
+// GetSignBytes implements sdk.Msg interface (legacy)
 func (msg *MsgUpdateClient) GetSignBytes() []byte {
-	bz, _ := json.Marshal(msg)
+	bz := ModuleCdc.MustMarshalJSON(msg)
 	return sdk.MustSortJSON(bz)
 }
 
-// MsgDeactivateClient defines a message for deactivating a client
-type MsgDeactivateClient struct {
-	Creator  string `json:"creator" yaml:"creator"`
-	ClientID string `json:"client_id" yaml:"client_id"`
-	Reason   string `json:"reason,omitempty" yaml:"reason,omitempty"`
-}
-
-// NewMsgDeactivateClient creates a new MsgDeactivateClient
-func NewMsgDeactivateClient(creator, clientID, reason string) *MsgDeactivateClient {
-	return &MsgDeactivateClient{
-		Creator:  creator,
-		ClientID: clientID,
-		Reason:   reason,
-	}
-}
-
-// ValidateBasic validates the message (updated for v0.50)
-func (msg *MsgDeactivateClient) ValidateBasic() error {
-	_, err := sdk.AccAddressFromBech32(msg.Creator)
-	if err != nil {
-		return errors.Wrapf(sdkerrors.ErrInvalidAddress, "invalid creator address (%s)", err)
+// ValidateBasic performs basic validation of the message
+func (msg *MsgUpdateClient) ValidateBasic() error {
+	if msg.Creator == "" {
+		return errors.Wrap(ErrInvalidMessage, "creator cannot be empty")
 	}
 
-	if len(msg.ClientID) == 0 {
-		return errors.Wrap(sdkerrors.ErrInvalidRequest, "client ID cannot be empty")
+	if _, err := sdk.AccAddressFromBech32(msg.Creator); err != nil {
+		return errors.Wrapf(ErrInvalidMessage, "invalid creator address: %v", err)
+	}
+
+	if msg.ClientID == "" {
+		return errors.Wrap(ErrInvalidMessage, "client_id cannot be empty")
+	}
+
+	if len(msg.NewCapabilities) == 0 {
+		return errors.Wrap(ErrInvalidMessage, "new_capabilities cannot be empty")
 	}
 
 	return nil
 }
 
-// GetSigners returns the required signers (updated for v0.50)
+// ProtoMessage implements proto.Message interface
+func (msg *MsgUpdateClient) ProtoMessage() {}
+
+// Reset implements proto.Message interface
+func (msg *MsgUpdateClient) Reset() {
+	*msg = MsgUpdateClient{}
+}
+
+// String implements proto.Message interface
+func (msg *MsgUpdateClient) String() string {
+	return fmt.Sprintf("MsgUpdateClient{Creator: %s, ClientID: %s}", msg.Creator, msg.ClientID)
+}
+
+// MsgDeactivateClient defines the message for deactivating a client
+type MsgDeactivateClient struct {
+	Creator  string `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator,omitempty"`
+	ClientID string `protobuf:"bytes,2,opt,name=client_id,proto3" json:"client_id,omitempty"`
+	Reason   string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+}
+
+// Route implements sdk.Msg interface (legacy)
+func (msg *MsgDeactivateClient) Route() string {
+	return ModuleName
+}
+
+// Type implements sdk.Msg interface (legacy)
+func (msg *MsgDeactivateClient) Type() string {
+	return TypeMsgDeactivateClient
+}
+
+// GetSigners implements sdk.Msg interface
 func (msg *MsgDeactivateClient) GetSigners() []sdk.AccAddress {
 	creator, err := sdk.AccAddressFromBech32(msg.Creator)
 	if err != nil {
@@ -304,94 +323,111 @@ func (msg *MsgDeactivateClient) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{creator}
 }
 
-// Type returns the message type (legacy method for v0.50 compatibility)
-func (msg *MsgDeactivateClient) Type() string {
-	return TypeMsgDeactivateClient
+// GetSignersStr returns signers as strings (v0.50 requirement)
+func (msg *MsgDeactivateClient) GetSignersStr() ([]string, error) {
+	return []string{msg.Creator}, nil
 }
 
-// Route returns the message route (legacy method for v0.50 compatibility)
-func (msg *MsgDeactivateClient) Route() string {
-	return ModuleName
-}
-
-// GetSignBytes returns the message bytes to sign over (legacy method)
+// GetSignBytes implements sdk.Msg interface (legacy)
 func (msg *MsgDeactivateClient) GetSignBytes() []byte {
-	bz, _ := json.Marshal(msg)
+	bz := ModuleCdc.MustMarshalJSON(msg)
 	return sdk.MustSortJSON(bz)
 }
 
-// Event types (updated for v0.50)
-const (
-	EventTypeRegisterClient   = "register_client"
-	EventTypeStoreAnalysis    = "store_analysis"
-	EventTypeUpdateClient     = "update_client"
-	EventTypeDeactivateClient = "deactivate_client"
+// ValidateBasic performs basic validation of the message
+func (msg *MsgDeactivateClient) ValidateBasic() error {
+	if msg.Creator == "" {
+		return errors.Wrap(ErrInvalidMessage, "creator cannot be empty")
+	}
 
-	AttributeKeyClientID     = "client_id"
-	AttributeKeyCreator      = "creator"
-	AttributeKeyCapabilities = "capabilities"
-	AttributeKeyAnalysisType = "analysis_type"
-	AttributeKeyStatus       = "status"
-	AttributeKeyReason       = "reason"
+	if _, err := sdk.AccAddressFromBech32(msg.Creator); err != nil {
+		return errors.Wrapf(ErrInvalidMessage, "invalid creator address: %v", err)
+	}
+
+	if msg.ClientID == "" {
+		return errors.Wrap(ErrInvalidMessage, "client_id cannot be empty")
+	}
+
+	return nil
+}
+
+// ProtoMessage implements proto.Message interface
+func (msg *MsgDeactivateClient) ProtoMessage() {}
+
+// Reset implements proto.Message interface
+func (msg *MsgDeactivateClient) Reset() {
+	*msg = MsgDeactivateClient{}
+}
+
+// String implements proto.Message interface
+func (msg *MsgDeactivateClient) String() string {
+	return fmt.Sprintf("MsgDeactivateClient{Creator: %s, ClientID: %s}", msg.Creator, msg.ClientID)
+}
+
+// Event type constants
+const (
+	EventTypeClientRegistered   = "client_registered"
+	EventTypeAnalysisStored     = "analysis_stored"
+	EventTypeClientUpdated      = "client_updated"
+	EventTypeClientDeactivated  = "client_deactivated"
+
+	AttributeKeyClientID       = "client_id"
+	AttributeKeyCreator        = "creator"
+	AttributeKeyCapabilities   = "capabilities"
+	AttributeKeyAnalysisType   = "analysis_type"
+	AttributeKeyBlockHeight    = "block_height"
+	AttributeKeyTxHash         = "tx_hash"
+	AttributeKeyStatus         = "status"
+	AttributeKeyReason         = "reason"
 )
 
-// CreateRegisterClientEvent creates an event for client registration (updated for v0.50)
-func CreateRegisterClientEvent(clientID, creator string, capabilities []string) sdk.Event {
-	capJSON, _ := json.Marshal(capabilities)
-	
+// NewClientRegisteredEvent creates a new client registered event
+func NewClientRegisteredEvent(clientID, creator string, capabilities []string) sdk.Event {
 	return sdk.NewEvent(
-		EventTypeRegisterClient,
+		EventTypeClientRegistered,
 		sdk.NewAttribute(AttributeKeyClientID, clientID),
 		sdk.NewAttribute(AttributeKeyCreator, creator),
-		sdk.NewAttribute(AttributeKeyCapabilities, string(capJSON)),
+		sdk.NewAttribute(AttributeKeyCapabilities, strings.Join(capabilities, ",")),
+		sdk.NewAttribute(AttributeKeyStatus, "active"),
 	)
 }
 
-// CreateStoreAnalysisEvent creates an event for analysis storage (updated for v0.50)
-func CreateStoreAnalysisEvent(clientID, creator, analysisType string) sdk.Event {
+// NewAnalysisStoredEvent creates a new analysis stored event
+func NewAnalysisStoredEvent(clientID, creator, analysisType, txHash string, blockHeight int64) sdk.Event {
 	return sdk.NewEvent(
-		EventTypeStoreAnalysis,
+		EventTypeAnalysisStored,
 		sdk.NewAttribute(AttributeKeyClientID, clientID),
 		sdk.NewAttribute(AttributeKeyCreator, creator),
 		sdk.NewAttribute(AttributeKeyAnalysisType, analysisType),
+		sdk.NewAttribute(AttributeKeyBlockHeight, fmt.Sprintf("%d", blockHeight)),
+		sdk.NewAttribute(AttributeKeyTxHash, txHash),
+		sdk.NewAttribute(AttributeKeyStatus, "stored"),
 	)
 }
 
-// CreateUpdateClientEvent creates an event for client update (updated for v0.50)
-func CreateUpdateClientEvent(clientID, creator, status string) sdk.Event {
+// NewClientUpdatedEvent creates a new client updated event
+func NewClientUpdatedEvent(clientID, creator string, newCapabilities []string) sdk.Event {
 	return sdk.NewEvent(
-		EventTypeUpdateClient,
+		EventTypeClientUpdated,
 		sdk.NewAttribute(AttributeKeyClientID, clientID),
 		sdk.NewAttribute(AttributeKeyCreator, creator),
-		sdk.NewAttribute(AttributeKeyStatus, status),
+		sdk.NewAttribute(AttributeKeyCapabilities, strings.Join(newCapabilities, ",")),
+		sdk.NewAttribute(AttributeKeyStatus, "updated"),
 	)
 }
 
-// CreateDeactivateClientEvent creates an event for client deactivation (updated for v0.50)
-func CreateDeactivateClientEvent(clientID, creator, reason string) sdk.Event {
+// NewClientDeactivatedEvent creates a new client deactivated event
+func NewClientDeactivatedEvent(clientID, creator, reason string) sdk.Event {
 	return sdk.NewEvent(
-		EventTypeDeactivateClient,
+		EventTypeClientDeactivated,
 		sdk.NewAttribute(AttributeKeyClientID, clientID),
 		sdk.NewAttribute(AttributeKeyCreator, creator),
 		sdk.NewAttribute(AttributeKeyReason, reason),
+		sdk.NewAttribute(AttributeKeyStatus, "deactivated"),
 	)
 }
 
-// Implement sdk.Msg interface methods for v0.50 compatibility
-
-// GetSignersStr returns signers as strings (new method for v0.50)
-func (msg *MsgRegisterClient) GetSignersStr() []string {
-	return []string{msg.Creator}
-}
-
-func (msg *MsgStoreAnalysis) GetSignersStr() []string {
-	return []string{msg.Creator}
-}
-
-func (msg *MsgUpdateClient) GetSignersStr() []string {
-	return []string{msg.Creator}
-}
-
-func (msg *MsgDeactivateClient) GetSignersStr() []string {
-	return []string{msg.Creator}
+// Legacy Amino codec (will be set by codec.go)
+var ModuleCdc interface {
+	MustMarshalJSON(o interface{}) []byte
 }
