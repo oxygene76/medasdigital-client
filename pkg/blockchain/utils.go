@@ -12,9 +12,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
-	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
+	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	comethttp "github.com/cometbft/cometbft/rpc/client/http"
@@ -88,7 +89,7 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 	realAddressCodec := NewBech32AddressCodec(cb.bech32Prefix)
 	
 	// Get the underlying SDK codec for keyring creation
-	var sdkCodec addresscodec.Codec
+	var sdkCodec address.Codec
 	if bech32Codec, ok := realAddressCodec.(*Bech32AddressCodec); ok {
 		sdkCodec = bech32Codec.GetSDKCodec()
 	} else {
@@ -140,8 +141,8 @@ func (km *KeyManager) CreateKey(name, mnemonic string) (*keyring.Record, error) 
 		mnemonic = hex.EncodeToString(hash[:])[:64] // Use first 64 chars as "mnemonic"
 	}
 
-	// For v0.50, use simplified NewAccount call
-	record, err := km.keyring.NewAccount(name, mnemonic, "", "m/44'/118'/0'/0/0", keyring.Secp256k1)
+	// For v0.50, use simplified NewAccount call with hd.Secp256k1
+	record, err := km.keyring.NewAccount(name, mnemonic, "", "m/44'/118'/0'/0/0", hd.Secp256k1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create account: %w", err)
 	}
@@ -165,7 +166,9 @@ func (km *KeyManager) GetKeyByAddress(address string) (*keyring.Record, error) {
 		return nil, fmt.Errorf("failed to decode address: %w", err)
 	}
 
-	record, err := km.keyring.KeyByAddress(addr)
+	// Convert []byte to sdk.AccAddress for v0.50
+	accAddr := sdk.AccAddress(addr)
+	record, err := km.keyring.KeyByAddress(accAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key by address: %w", err)
 	}
@@ -233,11 +236,9 @@ func NewBlockchainMonitor(client *Client) *BlockchainMonitor {
 
 // Start starts monitoring blockchain events
 func (bm *BlockchainMonitor) Start() error {
-	// Subscribe to new blocks
-	if err := bm.client.clientCtx.Client.Start(); err != nil {
-		return fmt.Errorf("failed to start client: %w", err)
-	}
-
+	// Note: In v0.50, there's no Start() method on the client
+	// The client is ready to use immediately after creation
+	
 	// Start block monitoring goroutine
 	go bm.monitorBlocks()
 
@@ -371,8 +372,14 @@ func (th *TransactionHelper) BatchTransactions(msgs []sdk.Msg, signerName string
 		// Set gas limit
 		txBuilder.SetGasLimit(200000)
 
-		// Sign and broadcast
-		res, err := tx.BroadcastTx(th.client.clientCtx, txBuilder.GetTx())
+		// Encode transaction
+		txBytes, err := th.client.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
+		if err != nil {
+			return responses, fmt.Errorf("failed to encode transaction %d: %w", i, err)
+		}
+
+		// Broadcast transaction using client context
+		res, err := th.client.clientCtx.BroadcastTx(txBytes)
 		if err != nil {
 			return responses, fmt.Errorf("failed to broadcast transaction %d: %w", i, err)
 		}
