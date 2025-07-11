@@ -375,6 +375,43 @@ func (c *Client) GetChainStatus() (*coretypes.ResultStatus, error) {
 	return status, nil
 }
 
+// WaitForTransaction waits for a transaction to be included in a block
+func (c *Client) WaitForTransaction(txHash string, timeout time.Duration) (*coretypes.ResultTx, error) {
+	start := time.Now()
+	
+	for time.Since(start) < timeout {
+		tx, err := c.GetTransaction(txHash)
+		if err == nil {
+			return tx, nil
+		}
+		
+		// Don't spam the node
+		time.Sleep(1 * time.Second)
+	}
+	
+	return nil, fmt.Errorf("transaction %s not found after %v", txHash, timeout)
+}
+
+// EstimateGas estimates gas for a transaction
+func (c *Client) EstimateGas(msg sdk.Msg) (uint64, error) {
+	// Create a dry-run transaction
+	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
+	if err := txBuilder.SetMsgs(msg); err != nil {
+		return 0, fmt.Errorf("failed to set messages: %w", err)
+	}
+
+	// For now, return a fixed estimate
+	// In a real implementation, you would simulate the transaction
+	switch msg.Type() {
+	case "register_client":
+		return 150000, nil
+	case "store_analysis":
+		return 200000, nil
+	default:
+		return 100000, nil
+	}
+}
+
 // Helper functions
 func parseHeight(heightStr string) (int64, error) {
 	if heightStr == "" || heightStr == "latest" {
