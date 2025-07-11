@@ -35,7 +35,7 @@ func (b *Bech32AddressCodec) BytesToString(bz []byte) (string, error) {
 }
 
 // GetSDKCodec returns the underlying SDK codec for keyring operations
-func (b *Bech32AddressCodec) GetSDKCodec() address.Codec {
+func (b *Bech32AddressCodec) GetSDKCodec() addresscodec.Codec {
 	return b.codec
 }
 
