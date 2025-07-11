@@ -12,11 +12,11 @@ import (
 
 // Manager manages CUDA GPUs for astronomical analysis
 type Manager struct {
-	devices    []types.GPUDevice
-	config     *utils.GPUConfig
+	devices       []types.GPUDevice
+	config        *utils.GPUConfig
 	isInitialized bool
-	mutex      sync.RWMutex
-	training   map[int]*types.AITrainingResult
+	mutex         sync.RWMutex
+	training      map[int]*types.AITrainingResult
 }
 
 // NewManager creates a new GPU manager
@@ -26,10 +26,10 @@ func NewManager(config *utils.GPUConfig) *Manager {
 	}
 	
 	return &Manager{
-		devices:    make([]types.GPUDevice, 0),
-		config:     config,
+		devices:       make([]types.GPUDevice, 0),
+		config:        config,
 		isInitialized: false,
-		training:   make(map[int]*types.AITrainingResult),
+		training:      make(map[int]*types.AITrainingResult),
 	}
 }
 
@@ -225,14 +225,14 @@ func (m *Manager) GetGPUInfo() (*types.GPUInfo, error) {
 	}
 
 	info := &types.GPUInfo{
-		DeviceCount:         len(m.devices),
-		Devices:            updatedDevices,
-		TotalMemoryGB:      0,
-		AvailableMemoryGB:  0,
-		CUDAVersion:        "12.1",
-		DriverVersion:      "535.86.10",
-		IsInitialized:      m.isInitialized,
-		Timestamp:          time.Now(),
+		DeviceCount:    len(m.devices),
+		Devices:        updatedDevices,
+		TotalMemoryGB:  0,
+		AvailableMemoryGB: 0,
+		CUDAVersion:    "12.1",
+		DriverVersion:  "535.86.10",
+		IsInitialized:  m.isInitialized,
+		Timestamp:      time.Now(),
 	}
 
 	// Calculate totals
@@ -314,21 +314,54 @@ func (m *Manager) StartTraining(deviceID int, config map[string]interface{}) (*t
 		return nil, fmt.Errorf("training already running on device %d", deviceID)
 	}
 
-	// Create training result
+	// Create training result - use metadata approach to avoid struct literal issues
 	training := &types.AITrainingResult{
-		ID:          fmt.Sprintf("train_%d_%d", deviceID, time.Now().Unix()),
-		Status:      "running",
-		StartTime:   time.Now(),
-		DeviceID:    deviceID,
-		Epochs:      config["epochs"].(int),
-		BatchSize:   config["batch_size"].(int),
-		LearningRate: config["learning_rate"].(float64),
-		ModelType:   config["model_type"].(string),
-		DatasetSize: config["dataset_size"].(int),
+		Progress: 0.0,
+		Loss:     0.0,
+		Accuracy: 0.0,
 		GPUStats: types.GPUInfo{
 			DeviceCount: 1,
 			Devices:     []types.GPUDevice{m.devices[deviceID]},
 		},
+		Metadata: make(map[string]interface{}),
+	}
+
+	// Store training parameters in metadata to avoid direct field access issues
+	trainingID := fmt.Sprintf("train_%d_%d", deviceID, time.Now().Unix())
+	training.Metadata["id"] = trainingID
+	training.Metadata["status"] = "running"
+	training.Metadata["start_time"] = time.Now()
+	training.Metadata["device_id"] = deviceID
+	
+	// Extract config values safely
+	if epochs, ok := config["epochs"]; ok {
+		training.Metadata["epochs"] = epochs
+	} else {
+		training.Metadata["epochs"] = 10 // default
+	}
+	
+	if batchSize, ok := config["batch_size"]; ok {
+		training.Metadata["batch_size"] = batchSize
+	} else {
+		training.Metadata["batch_size"] = 32 // default
+	}
+	
+	if learningRate, ok := config["learning_rate"]; ok {
+		training.Metadata["learning_rate"] = learningRate
+	} else {
+		training.Metadata["learning_rate"] = 0.001 // default
+	}
+	
+	if modelType, ok := config["model_type"]; ok {
+		training.Metadata["model_type"] = modelType
+	} else {
+		training.Metadata["model_type"] = "neural_network" // default
+	}
+	
+	if datasetSize, ok := config["dataset_size"]; ok {
+		training.Metadata["dataset_size"] = datasetSize
+	} else {
+		training.Metadata["dataset_size"] = 10000 // default
 	}
 
 	m.training[deviceID] = training
@@ -340,13 +373,14 @@ func (m *Manager) StopTraining(deviceID int) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	if _, exists := m.training[deviceID]; !exists {
+	training, exists := m.training[deviceID]
+	if !exists {
 		return fmt.Errorf("no training running on device %d", deviceID)
 	}
 
-	training := m.training[deviceID]
-	training.Status = "stopped"
-	training.EndTime = time.Now()
+	// Update status and end time in metadata
+	training.Metadata["status"] = "stopped"
+	training.Metadata["end_time"] = time.Now()
 	
 	delete(m.training, deviceID)
 	return nil
@@ -362,16 +396,35 @@ func (m *Manager) GetTrainingStatus(deviceID int) (*types.AITrainingResult, erro
 		return nil, fmt.Errorf("no training running on device %d", deviceID)
 	}
 
-	// Update progress simulation
-	elapsed := time.Since(training.StartTime)
-	estimatedTotal := time.Duration(training.Epochs) * 30 * time.Second // 30s per epoch
-	
-	if elapsed >= estimatedTotal {
-		training.Status = "completed"
-		training.EndTime = time.Now()
-		training.Progress = 100.0
-	} else {
-		training.Progress = float64(elapsed) / float64(estimatedTotal) * 100.0
+	// Update progress simulation using metadata
+	startTimeInterface, hasStartTime := training.Metadata["start_time"]
+	if hasStartTime {
+		if startTime, ok := startTimeInterface.(time.Time); ok {
+			elapsed := time.Since(startTime)
+			
+			epochsInterface, hasEpochs := training.Metadata["epochs"]
+			if hasEpochs {
+				var epochs int
+				switch v := epochsInterface.(type) {
+				case int:
+					epochs = v
+				case float64:
+					epochs = int(v)
+				default:
+					epochs = 10 // default
+				}
+				
+				estimatedTotal := time.Duration(epochs) * 30 * time.Second // 30s per epoch
+				
+				if elapsed >= estimatedTotal {
+					training.Metadata["status"] = "completed"
+					training.Metadata["end_time"] = time.Now()
+					training.Progress = 100.0
+				} else {
+					training.Progress = float64(elapsed) / float64(estimatedTotal) * 100.0
+				}
+			}
+		}
 	}
 
 	return training, nil
