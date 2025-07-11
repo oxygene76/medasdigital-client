@@ -13,18 +13,12 @@ import (
 	clienttypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
 
-// AddressCodec represents the address codec interface for v0.50
-type AddressCodec interface {
-	StringToBytes(text string) ([]byte, error)
-	BytesToString(bz []byte) (string, error)
-}
-
 // Codec represents the application codec for MedasDigital client
 type Codec struct {
 	marshaler         codec.Codec
 	legacyAmino       *codec.LegacyAmino
 	interfaceRegistry types.InterfaceRegistry
-	addressCodec      AddressCodec
+	addressCodec      address.Codec
 }
 
 // NewCodec creates a new codec instance
@@ -89,7 +83,7 @@ func (c *Codec) GetInterfaceRegistry() types.InterfaceRegistry {
 }
 
 // GetAddressCodec returns the address codec
-func (c *Codec) GetAddressCodec() AddressCodec {
+func (c *Codec) GetAddressCodec() address.Codec {
 	return c.addressCodec
 }
 
@@ -178,8 +172,14 @@ func (c *Codec) UnmarshalLengthPrefixed(data []byte, v interface{}) error {
 
 // ValidateMessage validates a message using the codec
 func (c *Codec) ValidateMessage(msg interface{}) error {
+	// Check if it's an SDK message first
 	if sdkMsg, ok := msg.(sdk.Msg); ok {
 		return sdkMsg.ValidateBasic()
+	}
+	
+	// If it's a proto message, we can't validate without SDK interface
+	if _, ok := msg.(proto.Message); ok {
+		return nil // Proto messages without SDK interface can't be validated
 	}
 	
 	return nil
@@ -287,7 +287,7 @@ func (c *Codec) ValidateAddress(addr string) error {
 }
 
 // NewAddressCodec creates a new address codec with the given prefix
-func NewAddressCodec(prefix string) AddressCodec {
+func NewAddressCodec(prefix string) address.Codec {
 	return address.NewBech32Codec(prefix)
 }
 
@@ -333,7 +333,7 @@ func (c *Codec) Clone() *Codec {
 }
 
 // SetAddressCodec sets a new address codec
-func (c *Codec) SetAddressCodec(codec AddressCodec) {
+func (c *Codec) SetAddressCodec(codec address.Codec) {
 	c.addressCodec = codec
 }
 
