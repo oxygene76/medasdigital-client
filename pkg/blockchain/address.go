@@ -3,8 +3,9 @@ package blockchain
 import (
 	"fmt"
 	
-	"github.com/cosmos/cosmos-sdk/codec/address"
+	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
 )
+
 
 // AddressCodec interface for address operations
 type AddressCodec interface {
@@ -12,9 +13,8 @@ type AddressCodec interface {
 	BytesToString(bz []byte) (string, error)
 }
 
-// Bech32AddressCodec implements AddressCodec using cosmos-sdk address codec
 type Bech32AddressCodec struct {
-	codec address.Codec
+    codec addresscodec.Codec  // ✅ Verwendet addresscodec.Codec
 }
 
 // NewBech32AddressCodec creates a new Bech32 address codec
