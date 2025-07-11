@@ -12,7 +12,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/codec/address"
+	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
@@ -24,6 +24,9 @@ import (
 
 	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
+
+
+var sdkCodec addresscodec.Codec  // ✅ Konsistente Verwendung
 
 // ClientBuilder helps create blockchain clients with proper configuration
 type ClientBuilder struct {
