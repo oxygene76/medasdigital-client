@@ -192,7 +192,6 @@ type GPUDevice struct {
 
 // GPUInfo represents GPU information and capabilities
 type GPUInfo struct {
-	DriverVersion      string      `json:"driver_version"`
 	IsInitialized      bool        `json:"is_initialized"`
 	Timestamp          time.Time   `json:"timestamp"`
 	Name                string      `json:"name"`
