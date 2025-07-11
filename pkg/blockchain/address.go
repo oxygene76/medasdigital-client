@@ -34,6 +34,11 @@ func (b *Bech32AddressCodec) BytesToString(bz []byte) (string, error) {
 	return b.codec.BytesToString(bz)
 }
 
+// GetSDKCodec returns the underlying SDK codec for keyring operations
+func (b *Bech32AddressCodec) GetSDKCodec() address.Codec {
+	return b.codec
+}
+
 // ValidateAddress validates a bech32 address
 func ValidateAddress(codec AddressCodec, addr string) error {
 	_, err := codec.StringToBytes(addr)
