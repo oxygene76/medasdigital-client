@@ -173,12 +173,14 @@ type GPUDevice struct {
 	ID                int     `json:"id"`
 	Name              string  `json:"name"`
 	Memory            int64   `json:"memory"`            // bytes
+	MemoryGB          float64 `json:"memory_gb"`         // gigabytes (for convenience)
 	MemoryUsed        int64   `json:"memory_used"`       // bytes
 	MemoryFree        int64   `json:"memory_free"`       // bytes
 	Temperature       float64 `json:"temperature"`       // Celsius
 	Utilization       float64 `json:"utilization"`       // percentage
 	MemoryUtilization float64 `json:"memory_utilization"` // percentage
 	PowerDraw         float64 `json:"power_draw"`        // watts
+	PowerUsage        float64 `json:"power_usage"`       // watts (alias for PowerDraw)
 	MaxPowerDraw      float64 `json:"max_power_draw"`    // watts
 	ClockSpeed        int     `json:"clock_speed"`       // MHz
 	MemoryClockSpeed  int     `json:"memory_clock_speed"` // MHz
@@ -200,6 +202,66 @@ type GPUInfo struct {
 	Devices             []GPUDevice `json:"devices"`              // Individual GPU devices
 	TotalMemoryGB       float64     `json:"total_memory_gb"`      // Total memory across all devices
 	AvailableMemoryGB   float64     `json:"available_memory_gb"`  // Available memory across all devices
+}
+
+// GPUInfo helper methods
+
+// UpdateTotalMemory recalculates total and available memory from devices
+func (gi *GPUInfo) UpdateTotalMemory() {
+	var totalMemory, totalFree int64
+	for _, device := range gi.Devices {
+		totalMemory += device.Memory
+		totalFree += device.MemoryFree
+	}
+	gi.TotalMemoryGB = float64(totalMemory) / (1024 * 1024 * 1024)
+	gi.AvailableMemoryGB = float64(totalFree) / (1024 * 1024 * 1024)
+}
+
+// GetAverageTemperature returns average temperature across all devices
+func (gi *GPUInfo) GetAverageTemperature() float64 {
+	if len(gi.Devices) == 0 {
+		return gi.Temperature
+	}
+	
+	var total float64
+	for _, device := range gi.Devices {
+		total += device.Temperature
+	}
+	return total / float64(len(gi.Devices))
+}
+
+// GetAverageUtilization returns average utilization across all devices
+func (gi *GPUInfo) GetAverageUtilization() float64 {
+	if len(gi.Devices) == 0 {
+		return gi.Utilization
+	}
+	
+	var total float64
+	for _, device := range gi.Devices {
+		total += device.Utilization
+	}
+	return total / float64(len(gi.Devices))
+}
+
+// HasOverheatingDevice checks if any device is overheating
+func (gi *GPUInfo) HasOverheatingDevice() bool {
+	for _, device := range gi.Devices {
+		if device.IsOverheating() {
+			return true
+		}
+	}
+	return false
+}
+
+// GetAvailableDevices returns devices that are available for use
+func (gi *GPUInfo) GetAvailableDevices() []GPUDevice {
+	var available []GPUDevice
+	for _, device := range gi.Devices {
+		if device.IsAvailable {
+			available = append(available, device)
+		}
+	}
+	return available
 }
 
 // Capabilities represents client capabilities
@@ -380,6 +442,49 @@ func generateResultID() string {
 	return fmt.Sprintf("result_%d_%s", 
 		time.Now().Unix(), 
 		strings.ToLower(fmt.Sprintf("%x", time.Now().UnixNano())[:8]))
+}
+
+// GPUDevice helper methods
+
+// SetMemoryFromBytes sets both Memory (bytes) and MemoryGB (gigabytes) from bytes
+func (gd *GPUDevice) SetMemoryFromBytes(bytes int64) {
+	gd.Memory = bytes
+	gd.MemoryGB = float64(bytes) / (1024 * 1024 * 1024)
+}
+
+// SetMemoryFromGB sets both Memory (bytes) and MemoryGB (gigabytes) from gigabytes
+func (gd *GPUDevice) SetMemoryFromGB(gb float64) {
+	gd.MemoryGB = gb
+	gd.Memory = int64(gb * 1024 * 1024 * 1024)
+}
+
+// SetPowerUsage sets both PowerDraw and PowerUsage (they're the same)
+func (gd *GPUDevice) SetPowerUsage(watts float64) {
+	gd.PowerDraw = watts
+	gd.PowerUsage = watts
+}
+
+// GetMemoryUsagePercent returns memory usage as percentage
+func (gd *GPUDevice) GetMemoryUsagePercent() float64 {
+	if gd.Memory == 0 {
+		return 0
+	}
+	return float64(gd.MemoryUsed) / float64(gd.Memory) * 100
+}
+
+// GetAvailableMemoryGB returns available memory in GB
+func (gd *GPUDevice) GetAvailableMemoryGB() float64 {
+	return float64(gd.MemoryFree) / (1024 * 1024 * 1024)
+}
+
+// IsOverheating checks if GPU temperature is too high
+func (gd *GPUDevice) IsOverheating() bool {
+	return gd.Temperature > 85.0 // 85°C threshold
+}
+
+// IsHighUtilization checks if GPU utilization is high
+func (gd *GPUDevice) IsHighUtilization() bool {
+	return gd.Utilization > 90.0 // 90% threshold
 }
 
 // RegisteredClient represents a registered client on the blockchain
