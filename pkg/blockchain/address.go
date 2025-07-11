@@ -20,7 +20,7 @@ type Bech32AddressCodec struct {
 // NewBech32AddressCodec creates a new Bech32 address codec
 func NewBech32AddressCodec(prefix string) AddressCodec {
 	return &Bech32AddressCodec{
-		codec: address.NewBech32Codec(prefix),
+		codec: addresscodec.NewBech32Codec(prefix),
 	}
 }
 
