@@ -5,76 +5,65 @@ import (
 	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/gogoproto/proto"
-
-	clienttypes "github.com/oxygene76/medasdigital-client/internal/types"
+	
+	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
 
-// Codec represents the application codec for MedasDigital client
+// Codec handles encoding/decoding for blockchain operations
 type Codec struct {
 	marshaler         codec.Codec
-	legacyAmino       *codec.LegacyAmino
 	interfaceRegistry types.InterfaceRegistry
-	addressCodec      address.Codec
+	addressCodec      AddressCodec
+	config            CodecConfig
 }
 
-// NewCodec creates a new codec instance
+// CodecConfig configuration for codec
+type CodecConfig struct {
+	Bech32Prefix   string
+	UseProtobuf    bool
+	UseLegacyAmino bool
+}
+
+// NewCodec creates a new codec with default configuration
 func NewCodec() *Codec {
 	interfaceRegistry := types.NewInterfaceRegistry()
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
-	legacyAmino := codec.NewLegacyAmino()
-	addressCodec := address.NewBech32Codec("medas")
-
-	// Register interfaces
 	RegisterInterfaces(interfaceRegistry)
-	RegisterLegacyAminoCodec(legacyAmino)
-
+	
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	
 	return &Codec{
 		marshaler:         marshaler,
-		legacyAmino:       legacyAmino,
 		interfaceRegistry: interfaceRegistry,
-		addressCodec:      addressCodec,
+		addressCodec:      NewBech32AddressCodec("medas"),
+		config: CodecConfig{
+			Bech32Prefix:   "medas",
+			UseProtobuf:    true,
+			UseLegacyAmino: true,
+		},
 	}
 }
 
-// RegisterInterfaces registers message interfaces for protobuf
-func RegisterInterfaces(registry types.InterfaceRegistry) {
-	// Register message types for the clientregistry module
-	registry.RegisterImplementations(
-		(*sdk.Msg)(nil),
-		&MsgRegisterClient{},
-		&MsgStoreAnalysis{},
-		&MsgUpdateClient{},
-		&MsgDeactivateClient{},
-	)
-
-	// Register query interfaces if needed
-	// registry.RegisterImplementations(
-	//     (*sdk.Query)(nil),
-	//     &QueryClient{},
-	// )
+// NewCodecWithConfig creates a new codec with custom configuration
+func NewCodecWithConfig(config CodecConfig) *Codec {
+	interfaceRegistry := types.NewInterfaceRegistry()
+	RegisterInterfaces(interfaceRegistry)
+	
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	
+	return &Codec{
+		marshaler:         marshaler,
+		interfaceRegistry: interfaceRegistry,
+		addressCodec:      NewBech32AddressCodec(config.Bech32Prefix),
+		config:            config,
+	}
 }
 
-// RegisterLegacyAminoCodec registers legacy amino codec for backwards compatibility
-func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	// Register message types for amino encoding
-	cdc.RegisterConcrete(&MsgRegisterClient{}, "clientregistry/MsgRegisterClient", nil)
-	cdc.RegisterConcrete(&MsgStoreAnalysis{}, "clientregistry/MsgStoreAnalysis", nil)
-	cdc.RegisterConcrete(&MsgUpdateClient{}, "clientregistry/MsgUpdateClient", nil)
-	cdc.RegisterConcrete(&MsgDeactivateClient{}, "clientregistry/MsgDeactivateClient", nil)
-}
-
-// GetMarshaler returns the protobuf marshaler
+// GetMarshaler returns the marshaler
 func (c *Codec) GetMarshaler() codec.Codec {
 	return c.marshaler
-}
-
-// GetLegacyAmino returns the legacy amino codec
-func (c *Codec) GetLegacyAmino() *codec.LegacyAmino {
-	return c.legacyAmino
 }
 
 // GetInterfaceRegistry returns the interface registry
@@ -83,308 +72,190 @@ func (c *Codec) GetInterfaceRegistry() types.InterfaceRegistry {
 }
 
 // GetAddressCodec returns the address codec
-func (c *Codec) GetAddressCodec() address.Codec {
+func (c *Codec) GetAddressCodec() AddressCodec {
 	return c.addressCodec
 }
 
-// MarshalJSON marshals any value to JSON using protobuf codec
-func (c *Codec) MarshalJSON(v interface{}) ([]byte, error) {
-	if msg, ok := v.(proto.Message); ok {
-		return c.marshaler.MarshalJSON(msg)
+// SetAddressCodec sets the address codec
+func (c *Codec) SetAddressCodec(codec AddressCodec) {
+	c.addressCodec = codec
+}
+
+// MarshalJSON marshals an object to JSON
+func (c *Codec) MarshalJSON(obj interface{}) ([]byte, error) {
+	if protoMsg, ok := obj.(proto.Message); ok {
+		return c.marshaler.MarshalJSON(protoMsg)
 	}
 	
 	// Fallback to standard JSON marshaling
-	return json.Marshal(v)
+	return json.Marshal(obj)
 }
 
-// UnmarshalJSON unmarshals JSON to any value using protobuf codec
-func (c *Codec) UnmarshalJSON(data []byte, v interface{}) error {
-	if msg, ok := v.(proto.Message); ok {
-		return c.marshaler.UnmarshalJSON(data, msg)
+// UnmarshalJSON unmarshals JSON to an object
+func (c *Codec) UnmarshalJSON(data []byte, obj interface{}) error {
+	if protoMsg, ok := obj.(proto.Message); ok {
+		return c.marshaler.UnmarshalJSON(data, protoMsg)
 	}
 	
 	// Fallback to standard JSON unmarshaling
-	return json.Unmarshal(data, v)
+	return json.Unmarshal(data, obj)
 }
 
-// MarshalBinary marshals any value to binary using protobuf codec
-func (c *Codec) MarshalBinary(v interface{}) ([]byte, error) {
-	if msg, ok := v.(proto.Message); ok {
-		return c.marshaler.Marshal(msg)
+// MarshalBinary marshals an object to binary format
+func (c *Codec) MarshalBinary(obj interface{}) ([]byte, error) {
+	if protoMsg, ok := obj.(proto.Message); ok {
+		return c.marshaler.Marshal(protoMsg)
 	}
 	
-	// Fallback to JSON for non-protobuf messages
-	return json.Marshal(v)
+	return nil, fmt.Errorf("object does not implement proto.Message")
 }
 
-// UnmarshalBinary unmarshals binary to any value using protobuf codec
-func (c *Codec) UnmarshalBinary(data []byte, v interface{}) error {
-	if msg, ok := v.(proto.Message); ok {
-		return c.marshaler.Unmarshal(data, msg)
+// UnmarshalBinary unmarshals binary data to an object
+func (c *Codec) UnmarshalBinary(data []byte, obj interface{}) error {
+	if protoMsg, ok := obj.(proto.Message); ok {
+		return c.marshaler.Unmarshal(data, protoMsg)
 	}
 	
-	// Fallback to JSON for non-protobuf messages
-	return json.Unmarshal(data, v)
+	return fmt.Errorf("object does not implement proto.Message")
 }
 
-// MarshalLengthPrefixed marshals with length prefix
-func (c *Codec) MarshalLengthPrefixed(v interface{}) ([]byte, error) {
-	if msg, ok := v.(proto.Message); ok {
-		return c.marshaler.MarshalLengthPrefixed(msg)
-	}
-	
-	// For non-protobuf, marshal to JSON and add length prefix
-	data, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	
-	// Simple length prefix implementation
-	length := len(data)
-	result := make([]byte, 4+length)
-	result[0] = byte(length >> 24)
-	result[1] = byte(length >> 16)
-	result[2] = byte(length >> 8)
-	result[3] = byte(length)
-	copy(result[4:], data)
-	
-	return result, nil
-}
-
-// UnmarshalLengthPrefixed unmarshals with length prefix
-func (c *Codec) UnmarshalLengthPrefixed(data []byte, v interface{}) error {
-	if len(data) < 4 {
-		return fmt.Errorf("data too short for length prefix")
-	}
-	
-	if msg, ok := v.(proto.Message); ok {
-		return c.marshaler.UnmarshalLengthPrefixed(data, msg)
-	}
-	
-	// Simple length prefix parsing
-	length := int(data[0])<<24 | int(data[1])<<16 | int(data[2])<<8 | int(data[3])
-	if len(data) < 4+length {
-		return fmt.Errorf("data length mismatch")
-	}
-	
-	return json.Unmarshal(data[4:4+length], v)
-}
-
-// ValidateMessage validates a message using the codec
-func (c *Codec) ValidateMessage(msg interface{}) error {
-	// Check if it's an SDK message first
-	if sdkMsg, ok := msg.(sdk.Msg); ok {
-		return sdkMsg.ValidateBasic()
-	}
-	
-	// If it's a proto message, we can't validate without SDK interface
-	if _, ok := msg.(proto.Message); ok {
-		return nil // Proto messages without SDK interface can't be validated
-	}
-	
-	return nil
-}
-
-// ValidateAndMarshal validates a message and marshals it
-func (c *Codec) ValidateAndMarshal(msg interface{}) ([]byte, error) {
-	if err := c.ValidateMessage(msg); err != nil {
-		return nil, fmt.Errorf("message validation failed: %w", err)
-	}
-	
-	return c.MarshalBinary(msg)
-}
-
-// GetTypeURL returns the type URL for a protobuf message
-func (c *Codec) GetTypeURL(msg interface{}) string {
-	if protoMsg, ok := msg.(proto.Message); ok {
-		msgName := proto.MessageName(protoMsg)
-		return "/" + string(msgName)
-	}
-	
-	// Fallback for non-protobuf messages
-	return fmt.Sprintf("/%T", msg)
-}
-
-// CodecConfig represents codec configuration
-type CodecConfig struct {
-	Bech32Prefix      string `json:"bech32_prefix"`
-	UseProtobuf       bool   `json:"use_protobuf"`
-	UseLegacyAmino    bool   `json:"use_legacy_amino"`
-	ValidateMessages  bool   `json:"validate_messages"`
-}
-
-// DefaultCodecConfig returns default codec configuration
-func DefaultCodecConfig() CodecConfig {
-	return CodecConfig{
-		Bech32Prefix:     "medas",
-		UseProtobuf:      true,
-		UseLegacyAmino:   true,
-		ValidateMessages: true,
-	}
-}
-
-// JSONCodecConfig returns configuration for JSON codec
-func JSONCodecConfig() CodecConfig {
-	return CodecConfig{
-		Bech32Prefix:     "medas",
-		UseProtobuf:      true,
-		UseLegacyAmino:   false,
-		ValidateMessages: true,
-	}
-}
-
-// BinaryCodecConfig returns configuration for binary codec
-func BinaryCodecConfig() CodecConfig {
-	return CodecConfig{
-		Bech32Prefix:     "medas",
-		UseProtobuf:      true,
-		UseLegacyAmino:   false,
-		ValidateMessages: false,
-	}
-}
-
-// NewCodecWithConfig creates a codec with specific configuration
-func NewCodecWithConfig(config CodecConfig) *Codec {
-	interfaceRegistry := types.NewInterfaceRegistry()
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
-	addressCodec := address.NewBech32Codec(config.Bech32Prefix)
-
-	var legacyAmino *codec.LegacyAmino
-	if config.UseLegacyAmino {
-		legacyAmino = codec.NewLegacyAmino()
-		RegisterLegacyAminoCodec(legacyAmino)
-	}
-
-	if config.UseProtobuf {
-		RegisterInterfaces(interfaceRegistry)
-	}
-
-	return &Codec{
-		marshaler:         marshaler,
-		legacyAmino:       legacyAmino,
-		interfaceRegistry: interfaceRegistry,
-		addressCodec:      addressCodec,
-	}
-}
-
-// EncodeAddress encodes an address to string using the address codec
+// EncodeAddress encodes address bytes to string
 func (c *Codec) EncodeAddress(addr []byte) (string, error) {
 	return c.addressCodec.BytesToString(addr)
 }
 
-// DecodeAddress decodes an address string to bytes using the address codec
+// DecodeAddress decodes address string to bytes
 func (c *Codec) DecodeAddress(addr string) ([]byte, error) {
 	return c.addressCodec.StringToBytes(addr)
 }
 
-// ValidateAddress validates an address format
+// ValidateAddress validates an address string
 func (c *Codec) ValidateAddress(addr string) error {
-	_, err := c.addressCodec.StringToBytes(addr)
+	return ValidateAddress(c.addressCodec, addr)
+}
+
+// RegisterInterfaces registers the interfaces for protobuf
+func RegisterInterfaces(registry types.InterfaceRegistry) {
+	registry.RegisterImplementations(
+		(*sdk.Msg)(nil),
+		&MsgRegisterClient{},
+		&MsgStoreAnalysis{},
+		&MsgUpdateClient{},
+		&MsgDeactivateClient{},
+	)
+}
+
+// RegisterLegacyAminoCodec registers the legacy amino codec
+func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	cdc.RegisterConcrete(&MsgRegisterClient{}, "clientregistry/MsgRegisterClient", nil)
+	cdc.RegisterConcrete(&MsgStoreAnalysis{}, "analysis/MsgStoreAnalysis", nil)
+	cdc.RegisterConcrete(&MsgUpdateClient{}, "clientregistry/MsgUpdateClient", nil)
+	cdc.RegisterConcrete(&MsgDeactivateClient{}, "clientregistry/MsgDeactivateClient", nil)
+}
+
+// ValidateMessage validates a message
+func (c *Codec) ValidateMessage(msg interface{}) error {
+	// Type assertion to sdk.Msg
+	if sdkMsg, ok := msg.(sdk.Msg); ok {
+		return sdkMsg.ValidateBasic()
+	}
+	
+	return fmt.Errorf("message does not implement sdk.Msg interface")
+}
+
+// GetTypeURL returns the type URL for a message
+func (c *Codec) GetTypeURL(msg proto.Message) string {
+	return c.interfaceRegistry.TypeURL(msg)
+}
+
+// MustMarshalJSON marshals to JSON or panics
+func (c *Codec) MustMarshalJSON(obj interface{}) []byte {
+	data, err := c.MarshalJSON(obj)
 	if err != nil {
-		return fmt.Errorf("invalid address format: %w", err)
+		panic(err)
 	}
-	return nil
+	return data
 }
 
-// NewAddressCodec creates a new address codec with the given prefix
-func NewAddressCodec(prefix string) address.Codec {
-	return address.NewBech32Codec(prefix)
-}
-
-// MessageTypeURLs returns type URLs for all registered message types
-func (c *Codec) MessageTypeURLs() []string {
-	return []string{
-		"/clientregistry.MsgRegisterClient",
-		"/clientregistry.MsgStoreAnalysis", 
-		"/clientregistry.MsgUpdateClient",
-		"/clientregistry.MsgDeactivateClient",
+// MustUnmarshalJSON unmarshals from JSON or panics
+func (c *Codec) MustUnmarshalJSON(data []byte, obj interface{}) {
+	if err := c.UnmarshalJSON(data, obj); err != nil {
+		panic(err)
 	}
 }
 
-// IsRegisteredMessage checks if a message type is registered
-func (c *Codec) IsRegisteredMessage(typeURL string) bool {
-	for _, registeredURL := range c.MessageTypeURLs() {
-		if typeURL == registeredURL {
-			return true
-		}
+// MustMarshalBinary marshals to binary or panics
+func (c *Codec) MustMarshalBinary(obj interface{}) []byte {
+	data, err := c.MarshalBinary(obj)
+	if err != nil {
+		panic(err)
 	}
-	return false
+	return data
 }
 
-// GetCodecInfo returns information about the codec
-func (c *Codec) GetCodecInfo() map[string]interface{} {
-	return map[string]interface{}{
-		"has_protobuf":      c.marshaler != nil,
-		"has_legacy_amino":  c.legacyAmino != nil,
-		"address_prefix":    "medas", // Could extract from codec if needed
-		"registered_types":  len(c.MessageTypeURLs()),
-		"type_urls":         c.MessageTypeURLs(),
+// MustUnmarshalBinary unmarshals from binary or panics
+func (c *Codec) MustUnmarshalBinary(data []byte, obj interface{}) {
+	if err := c.UnmarshalBinary(data, obj); err != nil {
+		panic(err)
 	}
 }
 
-// Clone creates a copy of the codec
-func (c *Codec) Clone() *Codec {
-	return &Codec{
-		marshaler:         c.marshaler,
-		legacyAmino:       c.legacyAmino,
-		interfaceRegistry: c.interfaceRegistry,
-		addressCodec:      c.addressCodec,
-	}
-}
+// Global codec instance
+var globalCodec *Codec
 
-// SetAddressCodec sets a new address codec
-func (c *Codec) SetAddressCodec(codec address.Codec) {
-	c.addressCodec = codec
-}
-
-// Global codec instance for convenience
-var GlobalCodec *Codec
-
-// InitGlobalCodec initializes the global codec instance
+// InitGlobalCodec initializes the global codec
 func InitGlobalCodec() {
-	GlobalCodec = NewCodec()
+	globalCodec = NewCodec()
 }
 
 // GetGlobalCodec returns the global codec instance
 func GetGlobalCodec() *Codec {
-	if GlobalCodec == nil {
+	if globalCodec == nil {
 		InitGlobalCodec()
 	}
-	return GlobalCodec
+	return globalCodec
 }
 
-// Helper functions for common operations
+// Convenience functions using global codec
 
-// MustMarshalJSON marshals to JSON and panics on error
-func MustMarshalJSON(codec *Codec, v interface{}) []byte {
-	bz, err := codec.MarshalJSON(v)
-	if err != nil {
-		panic(err)
+// MarshalJSON marshals using global codec
+func MarshalJSON(codec *Codec, obj interface{}) ([]byte, error) {
+	if codec == nil {
+		codec = GetGlobalCodec()
 	}
-	return bz
+	return codec.MarshalJSON(obj)
 }
 
-// MustUnmarshalJSON unmarshals from JSON and panics on error
-func MustUnmarshalJSON(codec *Codec, data []byte, v interface{}) {
-	err := codec.UnmarshalJSON(data, v)
-	if err != nil {
-		panic(err)
+// UnmarshalJSON unmarshals using global codec
+func UnmarshalJSON(codec *Codec, data []byte, obj interface{}) error {
+	if codec == nil {
+		codec = GetGlobalCodec()
 	}
+	return codec.UnmarshalJSON(data, obj)
 }
 
-// MustMarshalBinary marshals to binary and panics on error
-func MustMarshalBinary(codec *Codec, v interface{}) []byte {
-	bz, err := codec.MarshalBinary(v)
-	if err != nil {
-		panic(err)
+// MustMarshalJSON marshals to JSON or panics using global codec
+func MustMarshalJSON(codec *Codec, obj interface{}) []byte {
+	if codec == nil {
+		codec = GetGlobalCodec()
 	}
-	return bz
+	return codec.MustMarshalJSON(obj)
 }
 
-// MustUnmarshalBinary unmarshals from binary and panics on error
-func MustUnmarshalBinary(codec *Codec, data []byte, v interface{}) {
-	err := codec.UnmarshalBinary(data, v)
-	if err != nil {
-		panic(err)
+// MustUnmarshalJSON unmarshals from JSON or panics using global codec
+func MustUnmarshalJSON(codec *Codec, data []byte, obj interface{}) {
+	if codec == nil {
+		codec = GetGlobalCodec()
 	}
+	codec.MustUnmarshalJSON(data, obj)
+}
+
+// EncodeAddress encodes address using global codec
+func EncodeAddress(addr []byte) (string, error) {
+	return GetGlobalCodec().EncodeAddress(addr)
+}
+
+// DecodeAddress decodes address using global codec
+func DecodeAddress(addr string) ([]byte, error) {
+	return GetGlobalCodec().DecodeAddress(addr)
 }
