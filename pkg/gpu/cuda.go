@@ -3,505 +3,650 @@ package gpu
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"runtime"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/oxygene76/medasdigital-client/internal/types"
 	"github.com/oxygene76/medasdigital-client/pkg/utils"
 )
 
-// Manager handles GPU operations and CUDA management
+// Manager represents the GPU manager for CUDA operations
 type Manager struct {
-	config   utils.GPUConfig
-	devices  []types.GPUDevice
-	enabled  bool
-	cudaInit bool
+	config          *utils.GPUConfig
+	devices         []*types.GPUDevice
+	isInitialized   bool
+	mutex           sync.RWMutex
+	benchmarkResult *BenchmarkResult
+}
+
+// BenchmarkResult represents GPU benchmark results
+type BenchmarkResult struct {
+	DeviceID        int           `json:"device_id"`
+	DeviceName      string        `json:"device_name"`
+	TotalTime       time.Duration `json:"total_time"`
+	ThroughputGFLOPS float64       `json:"throughput_gflops"`
+	MemoryBandwidth float64       `json:"memory_bandwidth_gbps"`
+	PowerEfficiency float64       `json:"power_efficiency_gflops_per_watt"`
+	TestsPassed     int           `json:"tests_passed"`
+	TestsFailed     int           `json:"tests_failed"`
+}
+
+// TrainingMetrics represents AI training metrics
+type TrainingMetrics struct {
+	DeviceID       int     `json:"device_id"`
+	ModelSize      int64   `json:"model_size_mb"`
+	BatchSize      int     `json:"batch_size"`
+	Throughput     float64 `json:"throughput_samples_per_sec"`
+	MemoryUsage    float64 `json:"memory_usage_percent"`
+	PowerUsage     float64 `json:"power_usage_watts"`
+	Temperature    float64 `json:"temperature_celsius"`
+	TrainingLoss   float64 `json:"training_loss"`
+	ValidationLoss float64 `json:"validation_loss"`
 }
 
 // NewManager creates a new GPU manager
-func NewManager(config utils.GPUConfig) (*Manager, error) {
+func NewManager(config *utils.GPUConfig) (*Manager, error) {
 	manager := &Manager{
-		config:  config,
-		enabled: config.Enabled,
+		config:        config,
+		devices:       make([]*types.GPUDevice, 0),
+		isInitialized: false,
 	}
 
-	if config.Enabled {
-		if err := manager.initialize(); err != nil {
-			log.Printf("Warning: GPU initialization failed: %v", err)
-			manager.enabled = false
-		}
+	if err := manager.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize GPU manager: %w", err)
 	}
 
 	return manager, nil
 }
 
-// initialize initializes CUDA and detects GPU devices
-func (m *Manager) initialize() error {
+// Initialize initializes the GPU manager and detects available devices
+func (m *Manager) Initialize() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if m.isInitialized {
+		return nil
+	}
+
 	log.Println("Initializing GPU manager...")
 
-	// Check if CUDA is available
-	if !m.isCUDAAvailable() {
-		return fmt.Errorf("CUDA not available on this system")
+	// Detect CUDA devices
+	if err := m.detectCUDADevices(); err != nil {
+		return fmt.Errorf("failed to detect CUDA devices: %w", err)
 	}
 
-	// Initialize CUDA runtime
-	if err := m.initCUDA(); err != nil {
-		return fmt.Errorf("failed to initialize CUDA: %w", err)
+	// Initialize each device
+	for i, device := range m.devices {
+		if err := m.initializeDevice(device); err != nil {
+			log.Printf("Warning: Failed to initialize device %d: %v", i, err)
+			device.IsAvailable = false
+		}
 	}
 
-	// Detect GPU devices
-	if err := m.detectDevices(); err != nil {
-		return fmt.Errorf("failed to detect GPU devices: %w", err)
-	}
-
-	// Validate configured devices
-	if err := m.validateDevices(); err != nil {
-		return fmt.Errorf("device validation failed: %w", err)
-	}
-
+	m.isInitialized = true
 	log.Printf("GPU manager initialized with %d devices", len(m.devices))
+
 	return nil
 }
 
-// isCUDAAvailable checks if CUDA is available on the system
-func (m *Manager) isCUDAAvailable() bool {
-	// Check OS support
-	if runtime.GOOS != "linux" && runtime.GOOS != "windows" {
-		log.Printf("CUDA not supported on %s", runtime.GOOS)
-		return false
+// detectCUDADevices detects available CUDA devices
+func (m *Manager) detectCUDADevices() error {
+	// In a real implementation, this would use CUDA runtime API
+	// For now, we'll simulate device detection
+	
+	deviceCount := m.getDeviceCount()
+	
+	for i := 0; i < deviceCount; i++ {
+		device := &types.GPUDevice{
+			ID:   i,
+			Name: fmt.Sprintf("NVIDIA GeForce RTX 4090 #%d", i),
+		}
+		
+		// Set memory from GB (will auto-set both fields)
+		device.SetMemoryFromGB(24.0) // 24GB VRAM
+		
+		// Set other properties with proper type conversions
+		device.Temperature = float64(40 + i*2)                    // ✅ Fixed: int to float64
+		device.Utilization = 0.0
+		device.MemoryUtilization = 0.0
+		device.SetPowerUsage(float64(200 + i*50))                // ✅ Fixed: use helper method
+		device.MaxPowerDraw = float64(450 + i*50)                // ✅ Fixed: int to float64
+		device.ClockSpeed = 2520 + i*100                         // MHz
+		device.MemoryClockSpeed = 21000 + i*1000                 // MHz
+		device.ComputeCapability = "8.9"
+		device.IsAvailable = true
+		
+		// Calculate free memory (simulate 90% free initially)
+		device.MemoryFree = int64(float64(device.Memory) * 0.9)
+		device.MemoryUsed = device.Memory - device.MemoryFree
+		
+		m.devices = append(m.devices, device)
 	}
 
-	// In a real implementation, this would call CUDA driver API
-	// For now, we'll simulate based on configuration
-	return true
+	return nil
 }
 
-// initCUDA initializes the CUDA runtime
-func (m *Manager) initCUDA() error {
-	log.Println("Initializing CUDA runtime...")
+// getDeviceCount returns the number of available CUDA devices
+func (m *Manager) getDeviceCount() int {
+	// In a real implementation, this would call cudaGetDeviceCount()
+	// For simulation, return configured device count or detect based on system
+	if m.config.DeviceID >= 0 {
+		return 1 // Use single specified device
+	}
+	
+	// Simulate detection based on system capabilities
+	switch runtime.GOOS {
+	case "linux":
+		return 2 // Assume 2 GPUs on Linux
+	case "windows":
+		return 1 // Assume 1 GPU on Windows
+	default:
+		return 0 // No CUDA support on other platforms
+	}
+}
+
+// initializeDevice initializes a specific GPU device
+func (m *Manager) initializeDevice(device *types.GPUDevice) error {
+	log.Printf("Initializing GPU device %d: %s", device.ID, device.Name)
 	
 	// In a real implementation, this would:
-	// - Call cuInit() from CUDA driver API
-	// - Set up CUDA context
-	// - Initialize cuDNN if available
+	// - Set CUDA device context
+	// - Initialize CUDA streams
+	// - Allocate initial memory pools
+	// - Verify device capabilities
 	
-	// Simulated initialization
-	time.Sleep(100 * time.Millisecond)
-	m.cudaInit = true
+	// Simulate initialization by updating device status
+	device.IsAvailable = true
 	
-	log.Println("CUDA runtime initialized successfully")
-	return nil
-}
-
-// detectDevices detects available GPU devices
-func (m *Manager) detectDevices() error {
-	log.Println("Detecting GPU devices...")
-
-	// In a real implementation, this would call:
-	// - cuDeviceGetCount()
-	// - cuDeviceGetName()
-	// - cuDeviceGetAttribute() for various properties
+	// Update device info with current stats
+	if err := m.updateDeviceStats(device); err != nil {
+		return fmt.Errorf("failed to update device stats: %w", err)
+	}
 	
-	// Simulated device detection
-	m.devices = []types.GPUDevice{
-		{
-			ID:               0,
-			Name:             "NVIDIA GeForce RTX 4090",
-			ComputeCapability: "8.9",
-			MemoryGB:         24.0,
-			Temperature:      45,
-			Utilization:      0,
-			PowerUsage:       250,
-		},
-	}
-
-	// Add more devices if configured
-	for i := 1; i < len(m.config.CUDADevices); i++ {
-		if i < 4 { // Simulate up to 4 GPUs
-			device := types.GPUDevice{
-				ID:               i,
-				Name:             fmt.Sprintf("NVIDIA GPU Device %d", i),
-				ComputeCapability: "8.6",
-				MemoryGB:         12.0,
-				Temperature:      40 + i*2,
-				Utilization:      0,
-				PowerUsage:       200,
-			}
-			m.devices = append(m.devices, device)
-		}
-	}
-
-	log.Printf("Detected %d GPU devices", len(m.devices))
-	return nil
-}
-
-// validateDevices validates the configured GPU devices
-func (m *Manager) validateDevices() error {
-	for _, deviceID := range m.config.CUDADevices {
-		found := false
-		for _, device := range m.devices {
-			if device.ID == deviceID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("configured GPU device %d not found", deviceID)
-		}
-	}
+	log.Printf("Device %d initialized successfully", device.ID)
 	return nil
 }
 
 // GetInfo returns GPU information
 func (m *Manager) GetInfo() (*types.GPUInfo, error) {
-	if !m.enabled {
-		return nil, fmt.Errorf("GPU not enabled")
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	if !m.isInitialized {
+		return nil, fmt.Errorf("GPU manager not initialized")
 	}
 
-	totalMemory := 0.0
-	availableMemory := 0.0
-	
-	for _, device := range m.devices {
-		totalMemory += device.MemoryGB
-		// Simulate 80% available memory
-		availableMemory += device.MemoryGB * 0.8
+	// Get primary device info (first device or configured device)
+	primaryDevice := m.getPrimaryDevice()
+	if primaryDevice == nil {
+		return nil, fmt.Errorf("no GPU devices available")
 	}
 
 	info := &types.GPUInfo{
+		Name:              primaryDevice.Name,
+		Memory:            primaryDevice.Memory,
+		MemoryUsed:        primaryDevice.MemoryUsed,
+		Temperature:       primaryDevice.Temperature,
+		Utilization:       primaryDevice.Utilization,
+		CUDAVersion:       m.getCUDAVersion(),
+		DriverVersion:     m.getDriverVersion(),
+		ComputeCapability: primaryDevice.ComputeCapability,
 		DeviceCount:       len(m.devices),
-		Devices:          m.devices,
-		CUDAVersion:      "12.0",
-		DriverVersion:    "525.60.11",
-		TotalMemoryGB:    totalMemory,
-		AvailableMemoryGB: availableMemory,
+		Devices:           make([]types.GPUDevice, len(m.devices)),
 	}
+
+	// Copy all devices
+	for i, device := range m.devices {
+		info.Devices[i] = *device
+	}
+
+	// Update aggregated memory info
+	info.UpdateTotalMemory()
 
 	return info, nil
 }
 
-// PrintStatus prints GPU status information
-func (m *Manager) PrintStatus() error {
-	if !m.enabled {
-		fmt.Println("GPU Status: Disabled")
+// getPrimaryDevice returns the primary GPU device
+func (m *Manager) getPrimaryDevice() *types.GPUDevice {
+	if len(m.devices) == 0 {
 		return nil
 	}
 
-	info, err := m.GetInfo()
-	if err != nil {
-		return err
+	// If specific device ID configured, use that
+	if m.config.DeviceID >= 0 && m.config.DeviceID < len(m.devices) {
+		return m.devices[m.config.DeviceID]
+	}
+
+	// Otherwise use first available device
+	for _, device := range m.devices {
+		if device.IsAvailable {
+			return device
+		}
+	}
+
+	return m.devices[0] // Fallback to first device
+}
+
+// PrintStatus prints GPU status information
+func (m *Manager) PrintStatus() error {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	if !m.isInitialized {
+		fmt.Println("GPU Manager: Not initialized")
+		return nil
 	}
 
 	fmt.Printf("=== GPU Status ===\n")
-	fmt.Printf("CUDA Initialized: %t\n", m.cudaInit)
-	fmt.Printf("CUDA Version: %s\n", info.CUDAVersion)
-	fmt.Printf("Driver Version: %s\n", info.DriverVersion)
-	fmt.Printf("Device Count: %d\n", info.DeviceCount)
-	fmt.Printf("Total Memory: %.1f GB\n", info.TotalMemoryGB)
-	fmt.Printf("Available Memory: %.1f GB\n", info.AvailableMemoryGB)
-	
-	fmt.Printf("\n--- GPU Devices ---\n")
-	for _, device := range info.Devices {
-		fmt.Printf("Device %d: %s\n", device.ID, device.Name)
-		fmt.Printf("  Compute Capability: %s\n", device.ComputeCapability)
-		fmt.Printf("  Memory: %.1f GB\n", device.MemoryGB)
-		fmt.Printf("  Temperature: %d°C\n", device.Temperature)
-		fmt.Printf("  Utilization: %d%%\n", device.Utilization)
-		fmt.Printf("  Power Usage: %d W\n", device.PowerUsage)
+	fmt.Printf("CUDA Version: %s\n", m.getCUDAVersion())
+	fmt.Printf("Driver Version: %s\n", m.getDriverVersion())
+	fmt.Printf("Device Count: %d\n", len(m.devices))
+	fmt.Printf("\n")
+
+	for i, device := range m.devices {
+		fmt.Printf("--- Device %d ---\n", i)
+		fmt.Printf("Name: %s\n", device.Name)
+		fmt.Printf("Memory: %.1f GB (%.1f%% used)\n", 
+			device.MemoryGB, device.GetMemoryUsagePercent())
+		fmt.Printf("Temperature: %.1f°C\n", device.Temperature)
+		fmt.Printf("Utilization: %.1f%%\n", device.Utilization)
+		fmt.Printf("Power: %.1f W / %.1f W\n", device.PowerDraw, device.MaxPowerDraw)
+		fmt.Printf("Clock: %d MHz (Memory: %d MHz)\n", 
+			device.ClockSpeed, device.MemoryClockSpeed)
+		fmt.Printf("Compute Capability: %s\n", device.ComputeCapability)
+		fmt.Printf("Available: %t\n", device.IsAvailable)
+		
+		// Status indicators
+		if device.IsOverheating() {
+			fmt.Printf("⚠️  WARNING: Device is overheating!\n")
+		}
+		if device.IsHighUtilization() {
+			fmt.Printf("🔥 INFO: Device under high utilization\n")
+		}
+		
 		fmt.Printf("\n")
 	}
 
 	return nil
 }
 
-// RunBenchmark runs a GPU benchmark
+// RunBenchmark runs a GPU performance benchmark
 func (m *Manager) RunBenchmark() error {
-	if !m.enabled {
-		return fmt.Errorf("GPU not enabled")
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if !m.isInitialized {
+		return fmt.Errorf("GPU manager not initialized")
 	}
 
-	fmt.Println("Running GPU benchmark...")
+	primaryDevice := m.getPrimaryDevice()
+	if primaryDevice == nil {
+		return fmt.Errorf("no GPU devices available")
+	}
+
+	fmt.Printf("Running GPU benchmark on device %d: %s\n", 
+		primaryDevice.ID, primaryDevice.Name)
+
+	startTime := time.Now()
+
+	// Simulate benchmark tests
+	result := &BenchmarkResult{
+		DeviceID:   primaryDevice.ID,
+		DeviceName: primaryDevice.Name,
+	}
+
+	// Run matrix multiplication benchmark
+	fmt.Print("Matrix multiplication test... ")
+	if err := m.runMatrixBenchmark(primaryDevice, result); err != nil {
+		fmt.Printf("FAILED: %v\n", err)
+		result.TestsFailed++
+	} else {
+		fmt.Println("PASSED")
+		result.TestsPassed++
+	}
+
+	// Run memory bandwidth test
+	fmt.Print("Memory bandwidth test... ")
+	if err := m.runMemoryBenchmark(primaryDevice, result); err != nil {
+		fmt.Printf("FAILED: %v\n", err)
+		result.TestsFailed++
+	} else {
+		fmt.Println("PASSED")
+		result.TestsPassed++
+	}
+
+	// Run power efficiency test
+	fmt.Print("Power efficiency test... ")
+	if err := m.runPowerBenchmark(primaryDevice, result); err != nil {
+		fmt.Printf("FAILED: %v\n", err)
+		result.TestsFailed++
+	} else {
+		fmt.Println("PASSED")
+		result.TestsPassed++
+	}
+
+	result.TotalTime = time.Since(startTime)
+	m.benchmarkResult = result
+
+	// Print results
+	fmt.Printf("\n=== Benchmark Results ===\n")
+	fmt.Printf("Device: %s\n", result.DeviceName)
+	fmt.Printf("Total Time: %v\n", result.TotalTime)
+	fmt.Printf("Throughput: %.2f GFLOPS\n", result.ThroughputGFLOPS)
+	fmt.Printf("Memory Bandwidth: %.2f GB/s\n", result.MemoryBandwidth)
+	fmt.Printf("Power Efficiency: %.2f GFLOPS/W\n", result.PowerEfficiency)
+	fmt.Printf("Tests: %d passed, %d failed\n", result.TestsPassed, result.TestsFailed)
+
+	return nil
+}
+
+// runMatrixBenchmark runs matrix multiplication benchmark
+func (m *Manager) runMatrixBenchmark(device *types.GPUDevice, result *BenchmarkResult) error {
+	// Simulate matrix multiplication benchmark
+	time.Sleep(2 * time.Second) // Simulate computation time
 	
-	// Simulate benchmark
-	for _, deviceID := range m.config.CUDADevices {
-		fmt.Printf("Benchmarking GPU %d...\n", deviceID)
-		
-		// Simulate computational work
-		start := time.Now()
-		time.Sleep(2 * time.Second) // Simulate computation
-		duration := time.Since(start)
-		
-		// Simulate performance metrics
-		gflops := 15000.0 + float64(deviceID)*1000 // Simulated GFLOPS
-		bandwidth := 800.0 + float64(deviceID)*50  // Simulated GB/s
-		
-		fmt.Printf("  Computation Time: %v\n", duration)
-		fmt.Printf("  Performance: %.0f GFLOPS\n", gflops)
-		fmt.Printf("  Memory Bandwidth: %.0f GB/s\n", bandwidth)
-		fmt.Printf("  Status: PASS\n\n")
-	}
-
-	fmt.Println("GPU benchmark completed successfully")
+	// Update device utilization during benchmark
+	device.Utilization = 95.0
+	device.Temperature = float64(65 + rand.Intn(10))    // ✅ Fixed: int to float64
+	device.PowerDraw = float64(350 + rand.Intn(50))     // ✅ Fixed: int to float64
+	
+	// Calculate simulated GFLOPS based on device specs
+	baseGFLOPS := 35000.0 // Base GFLOPS for RTX 4090
+	variation := float64(rand.Intn(2000) - 1000) // ±1000 GFLOPS variation
+	result.ThroughputGFLOPS = baseGFLOPS + variation
+	
 	return nil
 }
 
-// AllocateMemory allocates GPU memory
-func (m *Manager) AllocateMemory(deviceID int, sizeGB float64) error {
-	if !m.enabled {
-		return fmt.Errorf("GPU not enabled")
-	}
-
-	// Find device
-	var device *types.GPUDevice
-	for i := range m.devices {
-		if m.devices[i].ID == deviceID {
-			device = &m.devices[i]
-			break
-		}
-	}
-
-	if device == nil {
-		return fmt.Errorf("device %d not found", deviceID)
-	}
-
-	if sizeGB > device.MemoryGB*0.8 { // Reserve 20% for system
-		return fmt.Errorf("insufficient memory on device %d", deviceID)
-	}
-
-	log.Printf("Allocated %.2f GB on GPU %d", sizeGB, deviceID)
+// runMemoryBenchmark runs memory bandwidth benchmark
+func (m *Manager) runMemoryBenchmark(device *types.GPUDevice, result *BenchmarkResult) error {
+	// Simulate memory bandwidth test
+	time.Sleep(1 * time.Second)
+	
+	// Update memory utilization
+	device.MemoryUtilization = 80.0
+	device.MemoryUsed = int64(float64(device.Memory) * 0.8)
+	device.MemoryFree = device.Memory - device.MemoryUsed
+	
+	// Calculate memory bandwidth (RTX 4090 ~1000 GB/s)
+	baseBandwidth := 1000.0
+	variation := float64(rand.Intn(100) - 50) // ±50 GB/s variation
+	result.MemoryBandwidth = baseBandwidth + variation
+	
 	return nil
 }
 
-// SetDevice sets the active CUDA device
-func (m *Manager) SetDevice(deviceID int) error {
-	if !m.enabled {
-		return fmt.Errorf("GPU not enabled")
+// runPowerBenchmark runs power efficiency benchmark  
+func (m *Manager) runPowerBenchmark(device *types.GPUDevice, result *BenchmarkResult) error {
+	// Simulate power efficiency test
+	time.Sleep(1 * time.Second)
+	
+	// Calculate power efficiency
+	if device.PowerDraw > 0 {
+		result.PowerEfficiency = result.ThroughputGFLOPS / device.PowerDraw
 	}
-
-	// Validate device ID
-	found := false
-	for _, device := range m.devices {
-		if device.ID == deviceID {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return fmt.Errorf("device %d not found", deviceID)
-	}
-
-	// In a real implementation, this would call cuCtxSetCurrent()
-	log.Printf("Set active CUDA device to %d", deviceID)
+	
 	return nil
 }
 
-// GetMemoryInfo returns memory information for a device
-func (m *Manager) GetMemoryInfo(deviceID int) (float64, float64, error) {
-	if !m.enabled {
-		return 0, 0, fmt.Errorf("GPU not enabled")
-	}
-
-	// Find device
-	for _, device := range m.devices {
-		if device.ID == deviceID {
-			// In a real implementation, this would call cuMemGetInfo()
-			total := device.MemoryGB
-			available := total * 0.8 // Simulate 80% available
-			return total, available, nil
-		}
-	}
-
-	return 0, 0, fmt.Errorf("device %d not found", deviceID)
-}
-
-// UpdateDeviceStatus updates device status information
-func (m *Manager) UpdateDeviceStatus() error {
-	if !m.enabled {
-		return fmt.Errorf("GPU not enabled")
-	}
-
-	for i := range m.devices {
-		// In a real implementation, this would query actual device status
-		// For simulation, we'll generate some realistic values
-		m.devices[i].Temperature = 40 + i*5 + (time.Now().Unix()%10)
-		m.devices[i].Utilization = int(time.Now().Unix()%100)
-		m.devices[i].PowerUsage = 200 + i*50 + int(time.Now().Unix()%100)
-	}
-
-	return nil
-}
-
-// CheckComputeCapability checks if device supports required compute capability
-func (m *Manager) CheckComputeCapability(deviceID int, requiredCapability string) (bool, error) {
-	if !m.enabled {
-		return false, fmt.Errorf("GPU not enabled")
-	}
-
-	for _, device := range m.devices {
-		if device.ID == deviceID {
-			// Simple string comparison for simulation
-			// In reality, you'd parse and compare version numbers
-			return device.ComputeCapability >= requiredCapability, nil
-		}
-	}
-
-	return false, fmt.Errorf("device %d not found", deviceID)
-}
-
-// Synchronize waits for all GPU operations to complete
-func (m *Manager) Synchronize() error {
-	if !m.enabled {
-		return fmt.Errorf("GPU not enabled")
-	}
-
-	// In a real implementation, this would call cudaDeviceSynchronize()
-	time.Sleep(10 * time.Millisecond) // Simulate sync time
+// updateDeviceStats updates real-time device statistics
+func (m *Manager) updateDeviceStats(device *types.GPUDevice) error {
+	// In a real implementation, this would query NVIDIA Management Library (NVML)
+	// For simulation, generate realistic values with some variation
+	
+	baseTime := time.Now().Unix()
+	
+	// Simulate temperature (40-80°C range with time-based variation)
+	device.Temperature = float64(40+device.ID*5) + float64(baseTime%10)  // ✅ Fixed: proper type conversion
+	
+	// Simulate utilization (0-100% with random variation)
+	device.Utilization = float64(int(baseTime % 100))                    // ✅ Fixed: int to float64
+	
+	// Simulate power usage (varies with utilization)
+	basePower := 200 + device.ID*50
+	variablePower := int(baseTime % 100)
+	device.PowerDraw = float64(basePower + variablePower)                // ✅ Fixed: int to float64
+	device.PowerUsage = device.PowerDraw                                  // Keep in sync
+	
+	// Simulate memory usage (changes over time)
+	memoryPercent := float64((baseTime + int64(device.ID*10)) % 90 + 10) // 10-100%
+	device.MemoryUsed = int64(float64(device.Memory) * memoryPercent / 100.0)
+	device.MemoryFree = device.Memory - device.MemoryUsed
+	device.MemoryUtilization = memoryPercent
+	
 	return nil
 }
 
 // GetTemperature returns the temperature of a specific device
-func (m *Manager) GetTemperature(deviceID int) (int, error) {
-	if !m.enabled {
-		return 0, fmt.Errorf("GPU not enabled")
+func (m *Manager) GetTemperature(deviceID int) float64 {  // ✅ Fixed: return type float64
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	
+	if deviceID < 0 || deviceID >= len(m.devices) {
+		return 0.0
 	}
-
-	for _, device := range m.devices {
-		if device.ID == deviceID {
-			return device.Temperature, nil
-		}
-	}
-
-	return 0, fmt.Errorf("device %d not found", deviceID)
+	
+	device := m.devices[deviceID]
+	m.updateDeviceStats(device) // Update before returning
+	
+	return device.Temperature  // ✅ Fixed: already float64
 }
 
 // GetUtilization returns the utilization of a specific device
-func (m *Manager) GetUtilization(deviceID int) (int, error) {
-	if !m.enabled {
-		return 0, fmt.Errorf("GPU not enabled")
+func (m *Manager) GetUtilization(deviceID int) float64 {  // ✅ Fixed: return type float64
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	
+	if deviceID < 0 || deviceID >= len(m.devices) {
+		return 0.0
 	}
-
-	for _, device := range m.devices {
-		if device.ID == deviceID {
-			return device.Utilization, nil
-		}
-	}
-
-	return 0, fmt.Errorf("device %d not found", deviceID)
+	
+	device := m.devices[deviceID]
+	m.updateDeviceStats(device) // Update before returning
+	
+	return device.Utilization  // ✅ Fixed: already float64
 }
 
-// IsEnabled returns whether GPU support is enabled
-func (m *Manager) IsEnabled() bool {
-	return m.enabled
+// GetMemoryInfo returns memory information for a specific device
+func (m *Manager) GetMemoryInfo(deviceID int) (total, used, free int64, err error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	
+	if deviceID < 0 || deviceID >= len(m.devices) {
+		return 0, 0, 0, fmt.Errorf("invalid device ID: %d", deviceID)
+	}
+	
+	device := m.devices[deviceID]
+	m.updateDeviceStats(device)
+	
+	return device.Memory, device.MemoryUsed, device.MemoryFree, nil
+}
+
+// AllocateMemory allocates GPU memory for computation
+func (m *Manager) AllocateMemory(deviceID int, sizeBytes int64) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	
+	if deviceID < 0 || deviceID >= len(m.devices) {
+		return fmt.Errorf("invalid device ID: %d", deviceID)
+	}
+	
+	device := m.devices[deviceID]
+	
+	if !device.IsAvailable {
+		return fmt.Errorf("device %d is not available", deviceID)
+	}
+	
+	if device.MemoryFree < sizeBytes {
+		return fmt.Errorf("insufficient memory: requested %d bytes, available %d bytes", 
+			sizeBytes, device.MemoryFree)
+	}
+	
+	// Simulate memory allocation
+	device.MemoryUsed += sizeBytes
+	device.MemoryFree -= sizeBytes
+	device.MemoryUtilization = float64(device.MemoryUsed) / float64(device.Memory) * 100.0
+	
+	log.Printf("Allocated %d bytes on device %d", sizeBytes, deviceID)
+	return nil
+}
+
+// FreeMemory frees previously allocated GPU memory
+func (m *Manager) FreeMemory(deviceID int, sizeBytes int64) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	
+	if deviceID < 0 || deviceID >= len(m.devices) {
+		return fmt.Errorf("invalid device ID: %d", deviceID)
+	}
+	
+	device := m.devices[deviceID]
+	
+	if device.MemoryUsed < sizeBytes {
+		return fmt.Errorf("cannot free %d bytes: only %d bytes allocated", 
+			sizeBytes, device.MemoryUsed)
+	}
+	
+	// Simulate memory deallocation
+	device.MemoryUsed -= sizeBytes
+	device.MemoryFree += sizeBytes
+	device.MemoryUtilization = float64(device.MemoryUsed) / float64(device.Memory) * 100.0
+	
+	log.Printf("Freed %d bytes on device %d", sizeBytes, deviceID)
+	return nil
+}
+
+// StartTraining starts AI model training with GPU acceleration
+func (m *Manager) StartTraining(modelPath string, deviceIDs []int) (*TrainingMetrics, error) {
+	if len(deviceIDs) == 0 {
+		deviceIDs = []int{0} // Default to device 0
+	}
+	
+	// Use first device for metrics
+	primaryDeviceID := deviceIDs[0]
+	
+	if primaryDeviceID < 0 || primaryDeviceID >= len(m.devices) {
+		return nil, fmt.Errorf("invalid device ID: %d", primaryDeviceID)
+	}
+	
+	device := m.devices[primaryDeviceID]
+	
+	// Simulate training setup
+	metrics := &TrainingMetrics{
+		DeviceID:     primaryDeviceID,
+		ModelSize:    1024, // 1GB model
+		BatchSize:    32,
+		Throughput:   150.0, // samples/sec
+		MemoryUsage:  75.0,  // 75% memory usage
+		PowerUsage:   device.PowerDraw,
+		Temperature:  device.Temperature,
+		TrainingLoss: 0.85,
+		ValidationLoss: 0.92,
+	}
+	
+	// Update device state for training
+	device.Utilization = 95.0
+	device.MemoryUtilization = metrics.MemoryUsage
+	device.Temperature = float64(70 + rand.Intn(10))  // ✅ Fixed: int to float64
+	
+	log.Printf("Started training on device %d with model: %s", primaryDeviceID, modelPath)
+	
+	return metrics, nil
+}
+
+// StopTraining stops AI model training
+func (m *Manager) StopTraining(deviceID int) error {
+	if deviceID < 0 || deviceID >= len(m.devices) {
+		return fmt.Errorf("invalid device ID: %d", deviceID)
+	}
+	
+	device := m.devices[deviceID]
+	
+	// Reset device state after training
+	device.Utilization = 5.0
+	device.MemoryUtilization = 20.0
+	device.Temperature = float64(45 + rand.Intn(5))  // ✅ Fixed: int to float64
+	
+	log.Printf("Stopped training on device %d", deviceID)
+	return nil
+}
+
+// getCUDAVersion returns the CUDA runtime version
+func (m *Manager) getCUDAVersion() string {
+	// In a real implementation, this would call cudaRuntimeGetVersion()
+	return "12.2"
+}
+
+// getDriverVersion returns the NVIDIA driver version
+func (m *Manager) getDriverVersion() string {
+	// In a real implementation, this would query NVML
+	return "545.84"
+}
+
+// GetBenchmarkResult returns the last benchmark result
+func (m *Manager) GetBenchmarkResult() *BenchmarkResult {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	
+	return m.benchmarkResult
+}
+
+// IsInitialized returns whether the GPU manager is initialized
+func (m *Manager) IsInitialized() bool {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	
+	return m.isInitialized
 }
 
 // GetDeviceCount returns the number of available devices
 func (m *Manager) GetDeviceCount() int {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	
 	return len(m.devices)
 }
 
-// GetConfiguredDevices returns the list of configured device IDs
-func (m *Manager) GetConfiguredDevices() []int {
-	return m.config.CUDADevices
-}
-
-// ValidateMemoryRequirement checks if there's enough memory for an operation
-func (m *Manager) ValidateMemoryRequirement(deviceID int, requiredGB float64) error {
-	if !m.enabled {
-		return fmt.Errorf("GPU not enabled")
+// SetDevice sets the active CUDA device for subsequent operations
+func (m *Manager) SetDevice(deviceID int) error {
+	if deviceID < 0 || deviceID >= len(m.devices) {
+		return fmt.Errorf("invalid device ID: %d", deviceID)
 	}
-
-	_, available, err := m.GetMemoryInfo(deviceID)
-	if err != nil {
-		return err
+	
+	device := m.devices[deviceID]
+	if !device.IsAvailable {
+		return fmt.Errorf("device %d is not available", deviceID)
 	}
-
-	if requiredGB > available {
-		return fmt.Errorf("insufficient memory: required %.2f GB, available %.2f GB", requiredGB, available)
-	}
-
+	
+	// In a real implementation, this would call cudaSetDevice()
+	log.Printf("Set active device to %d: %s", deviceID, device.Name)
 	return nil
 }
 
-// WarmUp warms up the GPU by running a small computation
-func (m *Manager) WarmUp() error {
-	if !m.enabled {
-		return fmt.Errorf("GPU not enabled")
-	}
-
-	log.Println("Warming up GPU devices...")
-
-	for _, deviceID := range m.config.CUDADevices {
-		if err := m.SetDevice(deviceID); err != nil {
-			return err
-		}
-
-		// Simulate warm-up computation
-		start := time.Now()
-		time.Sleep(100 * time.Millisecond)
-		duration := time.Since(start)
-
-		log.Printf("GPU %d warmed up in %v", deviceID, duration)
-	}
-
-	return nil
-}
-
-// Cleanup cleans up GPU resources
-func (m *Manager) Cleanup() error {
-	if !m.enabled {
+// Shutdown gracefully shuts down the GPU manager
+func (m *Manager) Shutdown() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	
+	if !m.isInitialized {
 		return nil
 	}
-
-	log.Println("Cleaning up GPU resources...")
-
-	// In a real implementation, this would:
-	// - Free allocated memory
-	// - Destroy CUDA contexts
-	// - Reset devices
-
-	m.cudaInit = false
-	log.Println("GPU cleanup completed")
-
+	
+	log.Println("Shutting down GPU manager...")
+	
+	// Clean up resources for each device
+	for i, device := range m.devices {
+		log.Printf("Cleaning up device %d: %s", i, device.Name)
+		device.IsAvailable = false
+		device.Utilization = 0.0
+		device.MemoryUtilization = 0.0
+	}
+	
+	m.isInitialized = false
+	log.Println("GPU manager shutdown complete")
+	
 	return nil
-}
-
-// MonitorDevices starts monitoring GPU devices
-func (m *Manager) MonitorDevices(interval time.Duration, callback func([]types.GPUDevice)) {
-	if !m.enabled {
-		return
-	}
-
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			if err := m.UpdateDeviceStatus(); err != nil {
-				log.Printf("Error updating device status: %v", err)
-				continue
-			}
-
-			if callback != nil {
-				callback(m.devices)
-			}
-		}
-	}()
-}
-
-// GetPerformanceMetrics returns performance metrics for benchmarking
-func (m *Manager) GetPerformanceMetrics(deviceID int) (map[string]float64, error) {
-	if !m.enabled {
-		return nil, fmt.Errorf("GPU not enabled")
-	}
-
-	// Simulate performance metrics
-	metrics := map[string]float64{
-		"compute_performance_gflops": 15000.0 + float64(deviceID)*1000,
-		"memory_bandwidth_gbps":      800.0 + float64(deviceID)*50,
-		"fp32_performance":           15000.0,
-		"fp16_performance":           30000.0,
-		"tensor_performance":         120000.0,
-	}
-
-	return metrics, nil
 }
