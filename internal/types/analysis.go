@@ -7,23 +7,22 @@ import (
 	"time"
 
 	"cosmossdk.io/errors"
-	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 )
 
 // AnalysisResult represents the result of an astronomical analysis
 type AnalysisResult struct {
-	ID          string                 `json:"id"`
-	ClientID    string                 `json:"client_id"`
-	Type        string                 `json:"type"`
-	Results     map[string]interface{} `json:"results"`
-	BlockHeight int64                  `json:"block_height,omitempty"`
-	TxHash      string                 `json:"tx_hash,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
-	Status      string                 `json:"status"`
-	Confidence  float64                `json:"confidence,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID            string                 `json:"id"`
+	ClientID      string                 `json:"client_id"`
+	AnalysisType  string                 `json:"analysis_type"`  // Renamed from Type to avoid conflict
+	Results       map[string]interface{} `json:"results"`
+	BlockHeight   int64                  `json:"block_height,omitempty"`
+	TxHash        string                 `json:"tx_hash,omitempty"`
+	Timestamp     time.Time              `json:"timestamp"`
+	Status        string                 `json:"status"`
+	Confidence    float64                `json:"confidence,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // OrbitalDynamicsResult represents results from orbital dynamics analysis
@@ -263,13 +262,13 @@ func IsValidAnalysisType(analysisType string) bool {
 // NewAnalysisResult creates a new analysis result
 func NewAnalysisResult(clientID, analysisType string) *AnalysisResult {
 	return &AnalysisResult{
-		ID:        generateResultID(),
-		ClientID:  clientID,
-		Type:      analysisType,
-		Results:   make(map[string]interface{}),
-		Timestamp: time.Now(),
-		Status:    StatusPending,
-		Metadata:  make(map[string]interface{}),
+		ID:           generateResultID(),
+		ClientID:     clientID,
+		AnalysisType: analysisType,
+		Results:      make(map[string]interface{}),
+		Timestamp:    time.Now(),
+		Status:       StatusPending,
+		Metadata:     make(map[string]interface{}),
 	}
 }
 
@@ -279,12 +278,12 @@ func (ar *AnalysisResult) Validate() error {
 		return errors.Wrap(ErrInvalidAnalysisResult, "client_id cannot be empty")
 	}
 	
-	if ar.Type == "" {
-		return errors.Wrap(ErrInvalidAnalysisResult, "type cannot be empty")
+	if ar.AnalysisType == "" {
+		return errors.Wrap(ErrInvalidAnalysisResult, "analysis_type cannot be empty")
 	}
 	
-	if !IsValidAnalysisType(ar.Type) {
-		return errors.Wrapf(ErrInvalidAnalysisResult, "invalid analysis type: %s", ar.Type)
+	if !IsValidAnalysisType(ar.AnalysisType) {
+		return errors.Wrapf(ErrInvalidAnalysisResult, "invalid analysis type: %s", ar.AnalysisType)
 	}
 	
 	if ar.Status == "" {
@@ -361,51 +360,4 @@ func generateResultID() string {
 	return fmt.Sprintf("result_%d_%s", 
 		time.Now().Unix(), 
 		strings.ToLower(fmt.Sprintf("%x", time.Now().UnixNano())[:8]))
-}
-
-// Interface implementations for Cosmos SDK v0.50 compatibility
-var _ sdk.Msg = (*AnalysisResult)(nil)
-
-// Route implements sdk.Msg interface (legacy)
-func (ar *AnalysisResult) Route() string {
-	return "analysis"
-}
-
-// Type implements sdk.Msg interface (legacy)
-func (ar *AnalysisResult) Type() string {
-	return "store_analysis_result"
-}
-
-// GetSigners implements sdk.Msg interface
-func (ar *AnalysisResult) GetSigners() []sdk.AccAddress {
-	// For analysis results, no specific signers required
-	return []sdk.AccAddress{}
-}
-
-// GetSignBytes implements sdk.Msg interface (legacy)
-func (ar *AnalysisResult) GetSignBytes() []byte {
-	bz, err := json.Marshal(ar)
-	if err != nil {
-		panic(err)
-	}
-	return sdk.MustSortJSON(bz)
-}
-
-// ValidateBasic implements sdk.Msg interface
-func (ar *AnalysisResult) ValidateBasic() error {
-	return ar.Validate()
-}
-
-// GetSignersStr returns signers as strings (v0.50 requirement)
-func (ar *AnalysisResult) GetSignersStr() ([]string, error) {
-	// For analysis results, return empty slice
-	return []string{}, nil
-}
-
-// RegisterInterfaces registers interfaces for protobuf
-func RegisterInterfaces(registry types.InterfaceRegistry) {
-	registry.RegisterImplementations(
-		(*sdk.Msg)(nil),
-		&AnalysisResult{},
-	)
 }
