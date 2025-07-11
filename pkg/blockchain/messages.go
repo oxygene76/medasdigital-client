@@ -225,12 +225,12 @@ func (msg *MsgStoreAnalysis) String() string {
 	return fmt.Sprintf("MsgStoreAnalysis{Creator: %s, ClientID: %s, Type: %s}", msg.Creator, msg.ClientID, msg.AnalysisType)
 }
 
-// MsgUpdateClient defines the message for updating client capabilities
+// MsgUpdateClient represents a client update message
 type MsgUpdateClient struct {
 	Creator         string   `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator,omitempty"`
-	ClientID        string   `protobuf:"bytes,2,opt,name=client_id,proto3" json:"client_id,omitempty"`
-	NewCapabilities []string `protobuf:"bytes,3,rep,name=new_capabilities,proto3" json:"new_capabilities,omitempty"`
-	NewMetadata     string   `protobuf:"bytes,4,opt,name=new_metadata,proto3" json:"new_metadata,omitempty"`
+	ClientID        string   `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	NewCapabilities []string `protobuf:"bytes,3,rep,name=new_capabilities,json=newCapabilities,proto3" json:"new_capabilities,omitempty"`
+	NewMetadata     string   `protobuf:"bytes,4,opt,name=new_metadata,json=newMetadata,proto3" json:"new_metadata,omitempty"`
 }
 
 // Route implements sdk.Msg interface (legacy)
