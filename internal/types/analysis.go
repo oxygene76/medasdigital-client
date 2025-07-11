@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"cosmossdk.io/errors"
@@ -205,6 +206,136 @@ type OrbitalElements struct {
 	Epoch              time.Time `json:"epoch"`                // Reference epoch
 	Period             float64   `json:"period"`               // Orbital period (years)
 	Uncertainty        map[string]float64 `json:"uncertainty"` // Parameter uncertainties
+}
+
+// TNOObject represents a Trans-Neptunian Object
+type TNOObject struct {
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	Classification  string          `json:"classification"`    // e.g., "KBO", "Plutino", "Centaur"
+	OrbitalElements OrbitalElements `json:"orbital_elements"`
+	PhysicalData    PhysicalData    `json:"physical_data"`
+	DiscoveryInfo   DiscoveryInfo   `json:"discovery_info"`
+	Observations    []Observation   `json:"observations"`
+	Confidence      float64         `json:"confidence"`        // Detection confidence (0-1)
+	Status          string          `json:"status"`            // "confirmed", "candidate", "rejected"
+}
+
+// PhysicalData represents physical properties of an object
+type PhysicalData struct {
+	Diameter        float64 `json:"diameter"`         // kilometers
+	Mass            float64 `json:"mass"`             // kg
+	Density         float64 `json:"density"`          // kg/m³
+	AlbedoGeometric float64 `json:"albedo_geometric"` // geometric albedo
+	AlbedoBond      float64 `json:"albedo_bond"`      // Bond albedo
+	RotationPeriod  float64 `json:"rotation_period"`  // hours
+	Magnitude       float64 `json:"magnitude"`        // absolute magnitude
+	Color           Color   `json:"color"`            // color indices
+}
+
+// Color represents color indices
+type Color struct {
+	BV float64 `json:"b_v"` // B-V color index
+	VI float64 `json:"v_i"` // V-I color index
+	RI float64 `json:"r_i"` // R-I color index
+	GR float64 `json:"g_r"` // g-r color index
+}
+
+// DiscoveryInfo represents discovery information
+type DiscoveryInfo struct {
+	DiscoveryDate     time.Time `json:"discovery_date"`
+	Discoverer        string    `json:"discoverer"`
+	Observatory       string    `json:"observatory"`
+	Instrument        string    `json:"instrument"`
+	ProvionalID       string    `json:"provisional_id"`
+	MPCDesignation    string    `json:"mpc_designation"`
+}
+
+// Observation represents a single observation
+type Observation struct {
+	Time        time.Time `json:"time"`
+	RA          float64   `json:"ra"`           // degrees
+	Dec         float64   `json:"dec"`          // degrees
+	Magnitude   float64   `json:"magnitude"`
+	Filter      string    `json:"filter"`
+	Observatory string    `json:"observatory"`
+	Quality     float64   `json:"quality"`      // 0-1 quality score
+	Residuals   Residuals `json:"residuals"`
+}
+
+// Residuals represents observation residuals
+type Residuals struct {
+	RAResidual  float64 `json:"ra_residual"`  // arcseconds
+	DecResidual float64 `json:"dec_residual"` // arcseconds
+	MagResidual float64 `json:"mag_residual"` // magnitude
+}
+
+// GravEffect represents gravitational effects and perturbations
+type GravEffect struct {
+	SourceBody      string                 `json:"source_body"`      // e.g., "Jupiter", "Neptune", "Planet9"
+	EffectType      string                 `json:"effect_type"`      // e.g., "mean_motion_resonance", "secular", "close_encounter"
+	Strength        float64                `json:"strength"`         // relative strength of perturbation
+	Period          float64                `json:"period"`           // characteristic period (years)
+	Phase           float64                `json:"phase"`            // phase angle (degrees)
+	Amplitude       float64                `json:"amplitude"`        // amplitude of effect
+	Parameters      map[string]float64     `json:"parameters"`       // additional parameters
+	TimeRange       TimeRange              `json:"time_range"`       // time range of effect
+	Resonance       *ResonanceInfo         `json:"resonance,omitempty"` // resonance details if applicable
+}
+
+// TimeRange represents a time range
+type TimeRange struct {
+	Start time.Time `json:"start"`
+	End   time.Time `json:"end"`
+}
+
+// ResonanceInfo represents mean motion resonance information
+type ResonanceInfo struct {
+	Ratio         string  `json:"ratio"`         // e.g., "3:2", "2:1"
+	LibrationAmp  float64 `json:"libration_amp"` // libration amplitude (degrees)
+	CriticalAngle float64 `json:"critical_angle"` // critical angle (degrees)
+	IsLibrating   bool    `json:"is_librating"`   // whether object is in libration
+}
+
+// Planet9Candidate represents a potential Planet 9 detection
+type Planet9Candidate struct {
+	ID                  string                 `json:"id"`
+	ConfidenceScore     float64                `json:"confidence_score"`     // 0-1
+	OrbitalElements     OrbitalElements        `json:"orbital_elements"`
+	PredictedPosition   SkyPosition            `json:"predicted_position"`   // current predicted position
+	SearchRegion        SearchRegion           `json:"search_region"`        // recommended search area
+	SupportingEvidence  []Evidence             `json:"supporting_evidence"`
+	ModelParameters     map[string]float64     `json:"model_parameters"`
+	DetectionMethod     string                 `json:"detection_method"`     // method used for detection
+	ValidationStatus    string                 `json:"validation_status"`    // "pending", "validated", "rejected"
+}
+
+// SkyPosition represents a position on the sky
+type SkyPosition struct {
+	RA          float64   `json:"ra"`           // degrees
+	Dec         float64   `json:"dec"`          // degrees
+	Uncertainty float64   `json:"uncertainty"`  // uncertainty radius (arcminutes)
+	Epoch       time.Time `json:"epoch"`        // epoch of position
+}
+
+// SearchRegion represents a region to search
+type SearchRegion struct {
+	CenterRA    float64 `json:"center_ra"`    // degrees
+	CenterDec   float64 `json:"center_dec"`   // degrees
+	RadiusRA    float64 `json:"radius_ra"`    // degrees
+	RadiusDec   float64 `json:"radius_dec"`   // degrees
+	Priority    int     `json:"priority"`     // search priority (1-10)
+	ExpectedMag float64 `json:"expected_mag"` // expected magnitude
+}
+
+// Evidence represents supporting evidence for Planet 9
+type Evidence struct {
+	Type        string                 `json:"type"`        // "orbital_clustering", "perihelion_alignment", etc.
+	Strength    float64                `json:"strength"`    // evidence strength (0-1)
+	Description string                 `json:"description"`
+	Objects     []string               `json:"objects"`     // supporting object IDs
+	Parameters  map[string]interface{} `json:"parameters"`  // type-specific parameters
+	Reference   string                 `json:"reference"`   // literature reference
 }
 
 // OrbitPrediction represents predicted positions for an object
