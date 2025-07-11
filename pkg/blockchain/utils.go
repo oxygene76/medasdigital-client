@@ -21,12 +21,6 @@ import (
 	"github.com/oxygene76/medasdigital-client/internal/types"
 )
 
-// AddressCodec interface for v0.50 compatibility
-type AddressCodec interface {
-	StringToBytes(text string) ([]byte, error)
-	BytesToString(bz []byte) (string, error)
-}
-
 // ClientBuilder helps create blockchain clients with proper configuration
 type ClientBuilder struct {
 	chainID         string
@@ -34,7 +28,7 @@ type ClientBuilder struct {
 	keyringBackend  string
 	keyringDir      string
 	bech32Prefix    string
-	addressCodec    AddressCodec
+	addressCodec    address.Codec
 }
 
 // NewClientBuilder creates a new client builder
@@ -84,7 +78,7 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 	}
 
 	// Create codec
-	interfaceRegistry := codec.NewInterfaceRegistry()
+	interfaceRegistry := types.NewInterfaceRegistry()
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
 	// Create keyring (v0.50 compatible)
@@ -114,11 +108,11 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 // KeyManager manages keyring operations
 type KeyManager struct {
 	keyring      keyring.Keyring
-	addressCodec AddressCodec
+	addressCodec address.Codec
 }
 
 // NewKeyManager creates a new key manager
-func NewKeyManager(kr keyring.Keyring, codec AddressCodec) *KeyManager {
+func NewKeyManager(kr keyring.Keyring, codec address.Codec) *KeyManager {
 	return &KeyManager{
 		keyring:      kr,
 		addressCodec: codec,
@@ -139,7 +133,7 @@ func (km *KeyManager) CreateKey(name, mnemonic string) (*keyring.Record, error) 
 		}
 	}
 
-	record, err := km.keyring.NewAccount(name, mnemonic, "", "", 0, 0)
+	record, err := km.keyring.NewAccount(name, mnemonic, "", "m/44'/118'/0'/0/0", 0, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create account: %w", err)
 	}
@@ -386,11 +380,11 @@ func (th *TransactionHelper) BatchTransactions(msgs []sdk.Msg, signerName string
 
 // AddressValidator provides address validation and conversion utilities
 type AddressValidator struct {
-	addressCodec AddressCodec
+	addressCodec address.Codec
 }
 
 // NewAddressValidator creates a new address validator
-func NewAddressValidator(codec AddressCodec) *AddressValidator {
+func NewAddressValidator(codec address.Codec) *AddressValidator {
 	return &AddressValidator{
 		addressCodec: codec,
 	}
