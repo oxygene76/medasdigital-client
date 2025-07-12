@@ -40,6 +40,10 @@ var (
 	// Configuration
 	cfgFile string
 	homeDir string
+	
+	// ✅ NEU: Globale Registry-Instanzen um Konflikte zu vermeiden
+	globalInterfaceRegistry types.InterfaceRegistry
+	globalCodec             codec.Codec
 )
 
 // Config represents the application configuration
@@ -648,6 +652,14 @@ func initializeClient() error {
 	sdkConfig.SetBech32PrefixForConsensusNode(bech32Prefix+"valcons", bech32Prefix+"valconspub")
 	sdkConfig.Seal()
 	
+	// Initialize global registry and codec ONCE
+	if globalInterfaceRegistry == nil {
+		globalInterfaceRegistry = getInterfaceRegistry()
+	}
+	if globalCodec == nil {
+		globalCodec = codec.NewProtoCodec(globalInterfaceRegistry)
+	}
+	
 	// Initialize global client
 	var err error
 	globalClient, err = medasClient.NewMedasDigitalClient()
@@ -663,14 +675,18 @@ func initKeysClientContext() (client.Context, error) {
 	// Load config first
 	cfg := loadConfig()
 	
-	// Create basic client context for keyring operations
-	interfaceRegistry := getInterfaceRegistry()
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	// Use global codec instances to avoid conflicts
+	if globalInterfaceRegistry == nil {
+		globalInterfaceRegistry = getInterfaceRegistry()
+	}
+	if globalCodec == nil {
+		globalCodec = codec.NewProtoCodec(globalInterfaceRegistry)
+	}
 	
 	clientCtx := client.Context{}.
 		WithKeyringDir(cfg.Client.KeyringDir).
-		WithCodec(marshaler).
-		WithInterfaceRegistry(interfaceRegistry)
+		WithCodec(globalCodec).
+		WithInterfaceRegistry(globalInterfaceRegistry)
 	
 	// Initialize keyring with proper backend
 	keyringBackend := keyring.BackendTest // Use test backend as default
@@ -683,7 +699,7 @@ func initKeysClientContext() (client.Context, error) {
 		keyringBackend,
 		cfg.Client.KeyringDir,
 		nil, // no input
-		marshaler,
+		globalCodec,
 	)
 	if err != nil {
 		return client.Context{}, fmt.Errorf("failed to create keyring: %w", err)
@@ -729,9 +745,16 @@ func loadConfig() *Config {
 
 // Helper functions for codec
 func getInterfaceRegistry() types.InterfaceRegistry {
+	// Only create once to avoid conflicts
+	if globalInterfaceRegistry != nil {
+		return globalInterfaceRegistry
+	}
+	
 	interfaceRegistry := types.NewInterfaceRegistry()
-	std.RegisterLegacyAminoCodec(legacy.Cdc)
+	
+	// Only register once
 	std.RegisterInterfaces(interfaceRegistry)
+	
 	return interfaceRegistry
 }
 
