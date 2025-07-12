@@ -870,71 +870,7 @@ func createBlockchainClient(clientCtx client.Context) (*blockchain.Client, error
 	return nil, fmt.Errorf("blockchain client creation not yet implemented for v0.50 - using simulation mode")
 }
 
-// ODER: Ersetzen Sie den ganzen register Command mit einer sichereren Version:
-var registerCmd = &cobra.Command{
-	Use:   "register",
-	Short: "Register client on the blockchain",
-	Long: `Register this client on the MedasDigital blockchain. This assigns 
-a unique client ID and registers the client's capabilities.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		capabilities, _ := cmd.Flags().GetStringSlice("capabilities")
-		metadata, _ := cmd.Flags().GetString("metadata")
-		from, _ := cmd.Flags().GetString("from")
-		keyringBackend, _ := cmd.Flags().GetString("keyring-backend")
-		
-		if from == "" {
-			return fmt.Errorf("--from flag is required")
-		}
-		
-		if len(capabilities) == 0 {
-			// Use default capabilities from config
-			capabilities = viper.GetStringSlice("client.capabilities")
-			if len(capabilities) == 0 {
-				capabilities = []string{"orbital_dynamics", "photometric_analysis"}
-			}
-		}
-		
-		fmt.Printf("Registering client with capabilities: %v\n", capabilities)
-		
-		// Use our custom keyring context
-		clientCtx, err := initKeysClientContextWithBackend(keyringBackend)
-		if err != nil {
-			return fmt.Errorf("failed to initialize client context: %w", err)
-		}
-		
-		// Get key info to verify it exists
-		keyInfo, err := clientCtx.Keyring.Key(from)
-		if err != nil {
-			fmt.Printf("Key '%s' not found. Create it first with:\n", from)
-			fmt.Printf("  ./bin/medasdigital-client keys add %s --keyring-backend %s\n", from, keyringBackend)
-			return fmt.Errorf("failed to get key info for '%s': %v", from, err)
-		}
-		
-		addr, err := keyInfo.GetAddress()
-		if err != nil {
-			return fmt.Errorf("failed to get address from key: %w", err)
-		}
-		
-		fmt.Printf("Using key '%s' with address: %s\n", from, addr.String())
-		
-		// ✅ SICHERER ANSATZ: Test connection first, dann entscheiden
-		cfg := loadConfig()
-		fmt.Printf("🔍 Testing connection to %s...\n", cfg.Chain.RPCEndpoint)
-		
-		if err := testBlockchainConnection(cfg.Chain.RPCEndpoint); err != nil {
-			fmt.Printf("⚠️  Blockchain connection failed: %v\n", err)
-			fmt.Println("💡 Running in simulation mode...")
-			return simulateRegistration(from, addr.String(), capabilities, metadata)
-		}
-		
-		// Wenn Connection OK ist, aber wir noch keine vollständige Tx-Implementation haben
-		fmt.Println("✅ Blockchain connection successful!")
-		fmt.Println("📡 Full transaction support coming soon...")
-		fmt.Println("💡 Running enhanced simulation...")
-		
-		return simulateRegistration(from, addr.String(), capabilities, metadata)
-	},
-}
+
 // Neue sichere Connection-Test Funktion:
 func testBlockchainConnection(rpcEndpoint string) error {
 	// Einfacher Connection-Test ohne vollständigen Client Context
