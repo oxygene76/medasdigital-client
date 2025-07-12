@@ -11,6 +11,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/cosmos/cosmos-sdk/client/keys"
+
 	medasClient "github.com/oxygene76/medasdigital-client/pkg/client"
 )
 
@@ -369,6 +371,8 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.medasdigital-client/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&homeDir, "home", "", "home directory (default is $HOME/.medasdigital-client)")
+
+	addKeysCommands()
 	
 	// Add subcommands
 	rootCmd.AddCommand(initCmd)
@@ -418,6 +422,34 @@ func init() {
 	
 	// Add standard cosmos flags
 	flags.AddTxFlagsToCmd(registerCmd)
+}
+
+func addKeysCommands() {
+	// Keys command group
+	keysCmd := &cobra.Command{
+		Use:   "keys",
+		Short: "Manage your application's keys",
+		Long: `Keys allows you to manage your local keystore for tendermint.
+These keys may be in any format supported by the Tendermint crypto library
+and can be used by light-clients, full nodes, or any other application
+that needs to sign with a private key.`,
+	}
+	
+	// Add standard cosmos keys commands
+	keysCmd.AddCommand(
+		keys.AddKeyCommand(),
+		keys.ExportKeyCommand(),
+		keys.ImportKeyCommand(), 
+		keys.ListKeysCmd(),
+		keys.ShowKeysCmd(),
+		keys.DeleteKeyCommand(),
+		keys.RenameKeyCommand(),
+		keys.ParseKeyStringCommand(),
+		keys.MigrateCommand(),
+	)
+	
+	// Add to root command
+	rootCmd.AddCommand(keysCmd)
 }
 
 func initViper() {
