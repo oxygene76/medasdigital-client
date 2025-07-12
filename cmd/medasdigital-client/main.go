@@ -63,6 +63,24 @@ var (
 	globalCodec             codec.Codec
 )
 
+// Client Registration Data Structure
+type ClientRegistrationData struct {
+	ClientAddress string    `json:"client_address"`
+	Capabilities  []string  `json:"capabilities"`
+	Metadata      string    `json:"metadata,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
+	Version       string    `json:"version"`
+}
+
+// Registration Result Storage
+type RegistrationResult struct {
+	TransactionHash  string                 `json:"transaction_hash"`
+	ClientID         string                 `json:"client_id"`
+	RegistrationData ClientRegistrationData `json:"registration_data"`
+	BlockHeight      int64                  `json:"block_height,omitempty"`
+	RegisteredAt     time.Time              `json:"registered_at"`
+}
+
 // Config represents the application configuration
 type Config struct {
 	Chain struct {
