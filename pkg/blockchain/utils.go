@@ -65,6 +65,13 @@ func (cb *ClientBuilder) WithKeyring(backend, dir string) *ClientBuilder {
 	return cb
 }
 
+// WithBech32Prefix sets the bech32 prefix and creates address codec
+func (cb *ClientBuilder) WithBech32Prefix(prefix string) *ClientBuilder {
+	cb.bech32Prefix = prefix
+	cb.addressCodec = NewBech32AddressCodec(prefix)
+	return cb
+}
+
 // BuildClient creates a configured blockchain client
 func (cb *ClientBuilder) BuildClient() (*Client, error) {
 	// Create RPC client
@@ -89,32 +96,6 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 		return nil, fmt.Errorf("failed to create keyring: %w", err)
 	}
 
-	// Create client context - simplified for v0.50
-	clientCtx := client.Context{}.
-		WithCodec(marshaler).
-		WithInterfaceRegistry(interfaceRegistry).
-		WithTxConfig(authtx.NewTxConfig(marshaler, authtx.DefaultSignModes)).
-		WithLegacyAmino(codec.NewLegacyAmino()).
-		WithBroadcastMode("block").
-		WithChainID(cb.chainID).
-		WithKeyring(kr).
-		WithClient(rpcClient)
-
-	return NewClient(clientCtx), nil
-}
-	// Create client context - simplified for v0.50
-	clientCtx := client.Context{}.
-		WithCodec(marshaler).
-		WithInterfaceRegistry(interfaceRegistry).
-		WithTxConfig(authtx.NewTxConfig(marshaler, authtx.DefaultSignModes)).
-		WithLegacyAmino(codec.NewLegacyAmino()).
-		WithBroadcastMode("block").
-		WithChainID(cb.chainID).
-		WithKeyring(kr).
-		WithClient(rpcClient)
-
-	return NewClient(clientCtx), nil
-}
 	// Create client context - simplified for v0.50
 	clientCtx := client.Context{}.
 		WithCodec(marshaler).
