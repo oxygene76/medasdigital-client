@@ -476,11 +476,14 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&homeDir, "home", "", "home directory (default is $HOME/.medasdigital-client)")
 
 	addKeysCommands()
+	checkAccountCmd.Flags().String("from", "", "Key name to check")
+	
 	
 	// Add subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(registerCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(checkAccountCmd)
 	rootCmd.AddCommand(analyzeCmd)
 	rootCmd.AddCommand(aiCmd)
 	rootCmd.AddCommand(gpuCmd)
@@ -968,6 +971,117 @@ func simulateRegistration(keyName, address string, capabilities []string, metada
 	fmt.Println("   ensure the MedasDigital chain is running and accessible.")
 	
 	return nil
+}
+
+// Fügen Sie einen neuen Command zur main.go hinzu:
+
+var checkAccountCmd = &cobra.Command{
+	Use:   "check-account [address]",
+	Short: "Check account status on blockchain",
+	Long:  "Check if an account exists on the blockchain and show its details",
+	Args:  cobra.MaxArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var address string
+		
+		if len(args) > 0 {
+			address = args[0]
+		} else {
+			// Use default key
+			from, _ := cmd.Flags().GetString("from")
+			if from == "" {
+				return fmt.Errorf("please provide address or use --from flag")
+			}
+			
+			clientCtx, err := initKeysClientContext()
+			if err != nil {
+				return fmt.Errorf("failed to initialize client context: %w", err)
+			}
+			
+			keyInfo, err := clientCtx.Keyring.Key(from)
+			if err != nil {
+				return fmt.Errorf("key not found: %w", err)
+			}
+			
+			addr, err := keyInfo.GetAddress()
+			if err != nil {
+				return fmt.Errorf("failed to get address: %w", err)
+			}
+			
+			address = addr.String()
+		}
+		
+		fmt.Printf("🔍 Checking account: %s\n", address)
+		
+		// Load config
+		cfg := loadConfig()
+		
+		// Test connection first
+		fmt.Printf("🔗 Connecting to: %s\n", cfg.Chain.RPCEndpoint)
+		if err := testBlockchainConnection(cfg.Chain.RPCEndpoint); err != nil {
+			return fmt.Errorf("blockchain connection failed: %w", err)
+		}
+		
+		fmt.Println("✅ Blockchain connection successful!")
+		
+		// Create RPC client for account query
+		rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+		if err != nil {
+			return fmt.Errorf("failed to create RPC client: %w", err)
+		}
+		
+		// Create minimal client context for query
+		if globalInterfaceRegistry == nil {
+			globalInterfaceRegistry = getInterfaceRegistry()
+		}
+		if globalCodec == nil {
+			globalCodec = codec.NewProtoCodec(globalInterfaceRegistry)
+		}
+		
+		queryCtx := client.Context{}.
+			WithClient(rpcClient).
+			WithChainID(cfg.Chain.ID).
+			WithCodec(globalCodec).
+			WithInterfaceRegistry(globalInterfaceRegistry)
+		
+		// Parse address
+		addr, err := sdk.AccAddressFromBech32(address)
+		if err != nil {
+			return fmt.Errorf("invalid address format: %w", err)
+		}
+		
+		// Try to query account
+		fmt.Println("📊 Querying account information...")
+		
+		// Use direct RPC query since AccountRetriever might be complex
+		queryPath := "/cosmos.auth.v1beta1.Query/Account"
+		queryData := fmt.Sprintf(`{"address":"%s"}`, address)
+		
+		res, _, err := queryCtx.QueryWithData(queryPath, []byte(queryData))
+		if err != nil {
+			fmt.Printf("❌ Account not found or query failed: %v\n", err)
+			fmt.Println("\n💡 This means:")
+			fmt.Println("   • Account does not exist on the blockchain")
+			fmt.Println("   • Account has never received any tokens")
+			fmt.Println("   • Account needs to be funded before making transactions")
+			fmt.Println("\n🔧 To fix this:")
+			fmt.Println("   1. Send some tokens to this address")
+			fmt.Println("   2. Or use a faucet if available on testnet")
+			fmt.Printf("   3. Address to fund: %s\n", address)
+			return nil
+		}
+		
+		fmt.Println("✅ Account found on blockchain!")
+		fmt.Printf("📍 Address: %s\n", address)
+		fmt.Printf("⛓️  Chain: %s\n", cfg.Chain.ID)
+		fmt.Printf("📊 Account data length: %d bytes\n", len(res))
+		
+		// Try to parse account info (basic)
+		if len(res) > 0 {
+			fmt.Println("✅ Account is initialized and ready for transactions!")
+		}
+		
+		return nil
+	},
 }
 
 func main() {
