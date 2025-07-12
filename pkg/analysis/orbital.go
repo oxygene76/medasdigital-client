@@ -416,7 +416,8 @@ func (m *Manager) AnalyzePhotometric(surveyData, targetList string) (*types.Anal
 	ClientID:    "",
 	BlockHeight: 0,
 	TxHash:      "",
-	}
+	},
+}
 	return result, nil
 }
 
