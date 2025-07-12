@@ -25,7 +25,15 @@ type Client struct {
 
 // NewClient creates a new blockchain client
 func NewClient(clientCtx client.Context) *Client {
-	// Create transaction factory
+	// Create codec
+	codec := NewCodec()
+	
+	// Ensure TxConfig is properly set in clientCtx
+	if clientCtx.TxConfig == nil {
+		clientCtx = clientCtx.WithTxConfig(codec.GetMarshaler().(codec.Codec))
+	}
+	
+	// Create transaction factory with proper configuration
 	txFactory := tx.Factory{}.
 		WithTxConfig(clientCtx.TxConfig).
 		WithAccountRetriever(clientCtx.AccountRetriever).
@@ -37,7 +45,7 @@ func NewClient(clientCtx client.Context) *Client {
 	return &Client{
 		clientCtx:  clientCtx,
 		txFactory:  txFactory,
-		codec:      NewCodec(),
+		codec:      codec,
 		monitoring: false,
 	}
 }
