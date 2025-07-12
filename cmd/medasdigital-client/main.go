@@ -16,6 +16,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/std"
+	"time"  // ← NEU für timestamp
+	blockchain "github.com/oxygene76/medasdigital-client/pkg/blockchain"  
 
 	medasClient "github.com/oxygene76/medasdigital-client/pkg/client"
 )
@@ -194,12 +196,9 @@ a unique client ID and registers the client's capabilities.`,
 		// Get key info to verify it exists
 		keyInfo, err := clientCtx.Keyring.Key(from)
 		if err != nil {
-
-			if err != nil {
 			fmt.Printf("Key '%s' not found. Create it first with:\n", from)
 			fmt.Printf("  ./bin/medasdigital-client keys add %s --keyring-backend %s\n", from, keyringBackend)
 			return fmt.Errorf("failed to get key info for '%s': %v", from, err)
-			}
 		}
 		
 		addr, err := keyInfo.GetAddress()
@@ -209,14 +208,47 @@ a unique client ID and registers the client's capabilities.`,
 		
 		fmt.Printf("Using key '%s' with address: %s\n", from, addr.String())
 		
-		// For now, simulate successful registration
-		// TODO: Implement actual blockchain registration when ready
-		fmt.Println("✅ Client registration simulated successfully!")
-		fmt.Printf("Client ID: client-%s\n", addr.String()[:8])
-		fmt.Printf("Capabilities: %v\n", capabilities)
+		// ✅ USE REAL BLOCKCHAIN REGISTRATION
+		fmt.Println("🚀 Connecting to MedasDigital blockchain...")
+		
+		// Create blockchain client with proper client context
+		blockchainClient, err := createBlockchainClient(clientCtx)
+		if err != nil {
+			return fmt.Errorf("failed to create blockchain client: %w", err)
+		}
+		
+		// Test connection first
+		fmt.Println("🔍 Testing blockchain connection...")
+		if err := blockchainClient.Health(); err != nil {
+			fmt.Printf("⚠️  Blockchain connection failed: %v\n", err)
+			fmt.Println("💡 Falling back to simulation mode...")
+			return simulateRegistration(from, addr.String(), capabilities, metadata)
+		}
+		
+		// Prepare metadata
+		metadataMap := make(map[string]interface{})
+		if metadata != "" {
+			metadataMap["description"] = metadata
+		}
+		metadataMap["timestamp"] = time.Now().Unix()
+		metadataMap["client_version"] = version
+		
+		// ✅ REAL BLOCKCHAIN REGISTRATION
+		fmt.Println("📡 Sending registration transaction...")
+		clientID, err := blockchainClient.RegisterClient(addr.String(), capabilities, metadataMap)
+		if err != nil {
+			fmt.Printf("❌ Blockchain registration failed: %v\n", err)
+			fmt.Println("💡 Falling back to simulation mode...")
+			return simulateRegistration(from, addr.String(), capabilities, metadata)
+		}
+		
+		fmt.Println("✅ Client successfully registered on blockchain!")
+		fmt.Printf("🆔 Client ID: %s\n", clientID)
+		fmt.Printf("📍 Address: %s\n", addr.String())
+		fmt.Printf("🔧 Capabilities: %v\n", capabilities)
 		
 		if metadata != "" {
-			fmt.Printf("Metadata: %s\n", metadata)
+			fmt.Printf("📋 Metadata: %s\n", metadata)
 		}
 		
 		return nil
@@ -825,6 +857,49 @@ func initKeysClientContextWithBackend(keyringBackend string) (client.Context, er
 	clientCtx = clientCtx.WithKeyring(kr)
 	
 	return clientCtx, nil
+}
+
+/ Helper function to create blockchain client
+func createBlockchainClient(clientCtx client.Context) (*blockchain.Client, error) {
+	// Load config
+	cfg := loadConfig()
+	
+	// Set up client context with chain configuration
+	clientCtx = clientCtx.
+		WithChainID(cfg.Chain.ID).
+		WithNodeURI(cfg.Chain.RPCEndpoint)
+	
+	// Create RPC client
+	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC client: %w", err)
+	}
+	
+	// Update client context with RPC client
+	clientCtx = clientCtx.WithClient(rpcClient)
+	
+	// Create blockchain client
+	blockchainClient := blockchain.NewClient(clientCtx)
+	
+	return blockchainClient, nil
+}
+
+// Fallback simulation function
+func simulateRegistration(keyName, address string, capabilities []string, metadata string) error {
+	fmt.Println("🧪 Running registration simulation...")
+	fmt.Printf("✅ Client registration simulated successfully!\n")
+	fmt.Printf("🆔 Client ID: client-%s\n", address[:8])
+	fmt.Printf("📍 Address: %s\n", address)
+	fmt.Printf("🔧 Capabilities: %v\n", capabilities)
+	
+	if metadata != "" {
+		fmt.Printf("📋 Metadata: %s\n", metadata)
+	}
+	
+	fmt.Println("\n💡 Note: This was a simulation. For real blockchain registration,")
+	fmt.Println("   ensure the MedasDigital chain is running and accessible.")
+	
+	return nil
 }
 
 func main() {
