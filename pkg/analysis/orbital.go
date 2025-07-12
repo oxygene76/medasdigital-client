@@ -416,8 +416,7 @@ func (m *Manager) AnalyzePhotometric(surveyData, targetList string) (*types.Anal
 	ClientID:    "",
 	BlockHeight: 0,
 	TxHash:      "",
-	},
-}
+	}
 	return result, nil
 }
 
@@ -426,7 +425,21 @@ func (m *Manager) AnalyzeClustering() (*types.AnalysisResult, error) {
 	log.Println("Starting clustering analysis")
 	start := time.Now()
 
-	// Placeholder 
+	result := &types.AnalysisResult{
+	AnalysisType: "clustering_analysis",
+	Data: map[string]interface{}{
+		"id":      fmt.Sprintf("clustering_%d", time.Now().Unix()),
+		"type":    "clustering_analysis",
+		"status":  "completed", 
+		"message": "Clustering analysis placeholder",
+	},
+	Metadata: map[string]string{
+		"version": "1.0.0",
+	},
+	Timestamp:   time.Now(),
+	ClientID:    "",
+	BlockHeight: 0,
+	TxHash:      "",
 	}
 
 	return result, nil
