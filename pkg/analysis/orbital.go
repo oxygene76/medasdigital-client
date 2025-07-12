@@ -400,18 +400,22 @@ func (m *Manager) AnalyzePhotometric(surveyData, targetList string) (*types.Anal
 	log.Printf("Starting photometric analysis on survey: %s", surveyData)
 	start := time.Now()
 
-	// Placeholder implementation
 	result := &types.AnalysisResult{
-		ID:        fmt.Sprintf("photometric_%d", time.Now().Unix()),
-		Type:      "photometric_analysis",
-		Status:    "completed",
-		Results:   map[string]interface{}{"message": "Photometric analysis placeholder"},
-		Timestamp: time.Now(),
-		Duration:  time.Since(start),
-		Metadata: types.AnalysisMetadata{
-			InputFiles: []string{surveyData, targetList},
-			Version:    "1.0.0",
-		},
+	AnalysisType: "photometric_analysis",
+	Data: map[string]interface{}{
+		"id":      fmt.Sprintf("photometric_%d", time.Now().Unix()),
+		"type":    "photometric_analysis", 
+		"status":  "completed",
+		"message": "Photometric analysis placeholder",
+	},
+	Metadata: map[string]string{
+		"input_files": surveyData + "," + targetList,
+		"version":     "1.0.0",
+	},
+	Timestamp:   time.Now(),
+	ClientID:    "",
+	BlockHeight: 0,
+	TxHash:      "",
 	}
 
 	return result, nil
@@ -422,17 +426,7 @@ func (m *Manager) AnalyzeClustering() (*types.AnalysisResult, error) {
 	log.Println("Starting clustering analysis")
 	start := time.Now()
 
-	// Placeholder implementation
-	result := &types.AnalysisResult{
-		ID:        fmt.Sprintf("clustering_%d", time.Now().Unix()),
-		Type:      "clustering_analysis",
-		Status:    "completed",
-		Results:   map[string]interface{}{"message": "Clustering analysis placeholder"},
-		Timestamp: time.Now(),
-		Duration:  time.Since(start),
-		Metadata: types.AnalysisMetadata{
-			Version: "1.0.0",
-		},
+	// Placeholder 
 	}
 
 	return result, nil
