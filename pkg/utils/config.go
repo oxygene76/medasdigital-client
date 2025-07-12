@@ -70,6 +70,7 @@ type ChainConfig struct {
 	RPCEndpoint  string `yaml:"rpc_endpoint" json:"rpc_endpoint"`
 	Bech32Prefix string `yaml:"bech32_prefix" json:"bech32_prefix"`
 	GasPrice     string `yaml:"gas_price" json:"gas_price"`
+	BaseDenom    string `yaml:"base_denom"`     // ← NEU
 }
 
 // ClientSettings client-specific settings
