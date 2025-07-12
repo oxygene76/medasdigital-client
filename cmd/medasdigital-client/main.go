@@ -1,29 +1,17 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/cosmos/cosmos-sdk/client"
-	"github.com/cosmos/cosmos-sdk/client/config"
 	"github.com/cosmos/cosmos-sdk/client/flags"
-	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/address"
-	"github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	comethttp "github.com/cometbft/cometbft/rpc/client/http"
 
 	medasClient "github.com/oxygene76/medasdigital-client/pkg/client"
-	"github.com/oxygene76/medasdigital-client/pkg/utils"
 )
 
 const (
@@ -45,6 +33,24 @@ var (
 	cfgFile string
 	homeDir string
 )
+
+// Config represents the application configuration
+type Config struct {
+	Chain struct {
+		ID           string `yaml:"chain_id"`
+		RPCEndpoint  string `yaml:"rpc_endpoint"`
+		Bech32Prefix string `yaml:"bech32_prefix"`
+	} `yaml:"chain"`
+	Client struct {
+		KeyringDir   string   `yaml:"keyring_dir"`
+		Capabilities []string `yaml:"capabilities"`
+	} `yaml:"client"`
+	GPU struct {
+		Enabled     bool `yaml:"enabled"`
+		DeviceID    int  `yaml:"device_id"`
+		MemoryLimit int  `yaml:"memory_limit"`
+	} `yaml:"gpu"`
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -92,25 +98,40 @@ operation.`,
 		}
 		
 		// Create default configuration
-		config := &utils.Config{
-			Chain: utils.ChainConfig{
+		config := &Config{
+			Chain: struct {
+				ID           string `yaml:"chain_id"`
+				RPCEndpoint  string `yaml:"rpc_endpoint"`
+				Bech32Prefix string `yaml:"bech32_prefix"`
+			}{
 				ID:           defaultChainID,
 				RPCEndpoint:  defaultRPCEndpoint,
 				Bech32Prefix: defaultBech32Prefix,
 			},
-			Client: utils.ClientConfig{
+			Client: struct {
+				KeyringDir   string   `yaml:"keyring_dir"`
+				Capabilities []string `yaml:"capabilities"`
+			}{
 				KeyringDir:   filepath.Join(homeDir, "keyring"),
 				Capabilities: []string{"orbital_dynamics", "photometric_analysis"},
 			},
-			GPU: utils.GPUConfig{
+			GPU: struct {
+				Enabled     bool `yaml:"enabled"`
+				DeviceID    int  `yaml:"device_id"`
+				MemoryLimit int  `yaml:"memory_limit"`
+			}{
 				Enabled:     false,
 				DeviceID:    0,
 				MemoryLimit: 8192, // 8GB default
 			},
 		}
 		
-		// Save configuration
-		if err := utils.SaveConfig(cfgFile, config); err != nil {
+		// Save configuration using viper
+		viper.Set("chain", config.Chain)
+		viper.Set("client", config.Client)
+		viper.Set("gpu", config.GPU)
+		
+		if err := viper.WriteConfigAs(cfgFile); err != nil {
 			return fmt.Errorf("failed to save configuration: %w", err)
 		}
 		
@@ -142,11 +163,10 @@ a unique client ID and registers the client's capabilities.`,
 		
 		if len(capabilities) == 0 {
 			// Use default capabilities from config
-			config, err := utils.LoadConfig()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+			capabilities = viper.GetStringSlice("client.capabilities")
+			if len(capabilities) == 0 {
+				capabilities = []string{"orbital_dynamics", "photometric_analysis"}
 			}
-			capabilities = config.Client.Capabilities
 		}
 		
 		fmt.Printf("Registering client with capabilities: %v\n", capabilities)
@@ -427,20 +447,22 @@ func initConfig() error {
 }
 
 func initializeClient() error {
-	// Load configuration
-	config, err := utils.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	// Initialize SDK config with default values
+	sdkConfig := sdk.GetConfig()
+	
+	// Get bech32 prefix from config or use default
+	bech32Prefix := viper.GetString("chain.bech32_prefix")
+	if bech32Prefix == "" {
+		bech32Prefix = defaultBech32Prefix
 	}
 	
-	// Initialize SDK config
-	sdkConfig := sdk.GetConfig()
-	sdkConfig.SetBech32PrefixForAccount(config.Chain.Bech32Prefix, config.Chain.Bech32Prefix+"pub")
-	sdkConfig.SetBech32PrefixForValidator(config.Chain.Bech32Prefix+"valoper", config.Chain.Bech32Prefix+"valoperpub")
-	sdkConfig.SetBech32PrefixForConsensusNode(config.Chain.Bech32Prefix+"valcons", config.Chain.Bech32Prefix+"valconspub")
+	sdkConfig.SetBech32PrefixForAccount(bech32Prefix, bech32Prefix+"pub")
+	sdkConfig.SetBech32PrefixForValidator(bech32Prefix+"valoper", bech32Prefix+"valoperpub")
+	sdkConfig.SetBech32PrefixForConsensusNode(bech32Prefix+"valcons", bech32Prefix+"valconspub")
 	sdkConfig.Seal()
 	
 	// Initialize global client
+	var err error
 	globalClient, err = medasClient.NewMedasDigitalClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
