@@ -192,48 +192,7 @@ func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxRespons
 	return res, nil
 }
 
-/*
-// sendTransaction signs and broadcasts a transaction
-func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxResponse, error) {
-	// Create transaction builder
-	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
-	if err := txBuilder.SetMsgs(msg); err != nil {
-		return nil, fmt.Errorf("failed to set messages: %w", err)
-	}
 
-	// Estimate gas
-	gasLimit, err := c.estimateGas([]sdk.Msg{msg})
-	if err != nil {
-		return nil, fmt.Errorf("failed to estimate gas: %w", err)
-	}
-
-	// Set gas limit with buffer
-	txBuilder.SetGasLimit(gasLimit)
-
-	// Set fee (optional - can be calculated from gas price)
-	// For now, we'll let the node calculate the fee
-
-	// Sign transaction - FIXED: Added context parameter for v0.50
-	err = tx.Sign(context.Background(), c.txFactory, signerName, txBuilder, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign transaction: %w", err)
-	}
-
-	// Encode transaction
-	txBytes, err := c.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode transaction: %w", err)
-	}
-
-	// Broadcast transaction
-	res, err := c.clientCtx.BroadcastTx(txBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to broadcast transaction: %w", err)
-	}
-
-	return res, nil
-}
-*/
 // estimateGas estimates gas for a transaction - FIXED: Handle 3 return values
 func (c *Client) estimateGas(msgs []sdk.Msg) (uint64, error) {
 	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
