@@ -180,6 +180,13 @@ a unique client ID and registers the client's capabilities.`,
 		metadata, _ := cmd.Flags().GetString("metadata")
 		from, _ := cmd.Flags().GetString("from")
 		keyringBackend, _ := cmd.Flags().GetString("keyring-backend")
+		gas, _ := cmd.Flags().GetUint64("gas")
+
+		 if gas > 0 {
+     		   fmt.Printf("⛽ Using manual gas limit: %d\n", gas)
+    		} else {
+   		fmt.Println("⛽ Using automatic gas estimation")
+    		}
 		
 		if from == "" {
 			return fmt.Errorf("--from flag is required")
@@ -721,7 +728,11 @@ func init() {
 	registerCmd.Flags().String("metadata", "", "Additional metadata")
 	registerCmd.Flags().String("from", "", "Key name to sign transaction")
 	registerCmd.Flags().String("keyring-backend", "test", "Keyring backend (test|file|os)")
+	registerCmd.Flags().Uint64("gas", 0, "Manual gas limit (0 = auto estimation)")  // ← NEU
 	registerCmd.MarkFlagRequired("from")
+
+
+
 	
 	// Analyze orbital flags
 	analyzeOrbitalCmd.Flags().String("output", "", "Output file for results")
