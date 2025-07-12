@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 	"strings"
+	sdkmath "cosmossdk.io/math"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -271,12 +272,6 @@ fmt.Println("⛓️  Chain ID:", cfg.Chain.ID)
 fmt.Println("📡 Creating blockchain client for real transaction...")
 
 // Create blockchain client with complete context
-blockchainClient, err := createFullBlockchainClient(clientCtx, cfg)
-if err != nil {
-    fmt.Printf("❌ Failed to create blockchain client: %v\n", err)
-    fmt.Println("💡 Falling back to simulation...")
-    return simulateRegistration(from, addr.String(), capabilities, metadata)
-}
 
 // Prepare metadata
 metadataMap := make(map[string]interface{})
@@ -1342,7 +1337,7 @@ func registerClientSimple(clientCtx client.Context, fromAddress string, capabili
 	}
 
 	// Create MsgSend (send 1 smallest unit to self)
-	amount := sdk.NewCoins(sdk.NewCoin(baseDenom, sdk.NewInt(1)))
+	amount := sdk.NewCoins(sdk.NewCoin(baseDenom, sdkmath.NewInt(1)))
 	msgSend := banktypes.NewMsgSend(fromAddr, fromAddr, amount)
 
 	// Create transaction
@@ -1363,7 +1358,7 @@ func registerClientSimple(clientCtx client.Context, fromAddress string, capabili
 
 	// Calculate fee (simple fee calculation)
 	gasLimit := txBuilder.GetTx().GetGas()
-	feeAmount := sdk.NewCoins(sdk.NewCoin(baseDenom, sdk.NewInt(int64(gasLimit*1000))))
+	feeAmount := sdk.NewCoins(sdk.NewCoin(baseDenom, sdkmath.NewInt(int64(gasLimit*1000))))
 	txBuilder.SetFeeAmount(feeAmount)
 
 	// Sign transaction
@@ -1372,7 +1367,7 @@ func registerClientSimple(clientCtx client.Context, fromAddress string, capabili
 		return nil, fmt.Errorf("from name not set in client context")
 	}
 
-	err = tx.Sign(clientCtx.TxConfig.SignModeHandler(), fromName, txBuilder, true)
+	err = tx.Sign(context.Background(), tx.Factory{}, fromName, txBuilder, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
@@ -1390,7 +1385,7 @@ func registerClientSimple(clientCtx client.Context, fromAddress string, capabili
 	}
 
 	if result.Code != 0 {
-		return nil, fmt.Errorf("transaction failed with code %d: %s", result.Code, result.Log)
+		return nil, fmt.Errorf("transaction failed with code %d: %s", result.Code, result.RawLog)
 	}
 
 	// Generate client ID from transaction hash
