@@ -8,8 +8,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/gogoproto/proto"
-	
-	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
 
 // Codec handles encoding/decoding for blockchain operations
@@ -153,38 +151,38 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgDeactivateClient{}, "clientregistry/MsgDeactivateClient", nil)
 }
 
-// ValidateMessage validates a message
+// ValidateMessage validates a message - FIXED: Proper interface checking
 func (c *Codec) ValidateMessage(msg interface{}) error {
-	// Try different interfaces to find ValidateBasic method
-	
-	// First try sdk.Msg interface
-	if sdkMsg, ok := msg.(sdk.Msg); ok {
-		return sdkMsg.ValidateBasic()
-	}
-	
-	// Try direct ValidateBasic method
+	// First try the direct ValidateBasic method interface
 	if validator, ok := msg.(interface{ ValidateBasic() error }); ok {
 		return validator.ValidateBasic()
 	}
 	
-	// Try reflection for ValidateBasic method (last resort)
-	// This is not ideal but works for proto messages without sdk.Msg interface
-	return fmt.Errorf("message does not implement validation interface")
+	// Try sdk.Msg interface (which should have ValidateBasic)
+	if sdkMsg, ok := msg.(sdk.Msg); ok {
+		// Check if this sdk.Msg actually has ValidateBasic method
+		if msgValidator, ok := sdkMsg.(interface{ ValidateBasic() error }); ok {
+			return msgValidator.ValidateBasic()
+		}
+		// sdk.Msg interface doesn't guarantee ValidateBasic in v0.50
+		return nil // No validation error if method not available
+	}
+	
+	// No validation interface found - not an error in v0.50
+	return nil
 }
 
 // GetTypeURL returns the type URL for a message
 func (c *Codec) GetTypeURL(msg proto.Message) string {
-	// Use the interface registry to resolve type URL
-	if resolver, ok := c.interfaceRegistry.(interface{
-		Resolve(typeUrl string) (proto.Message, error)
-	}); ok {
-		_ = resolver // We have a resolver but need reverse lookup
-		// For now, construct type URL manually
-		return "/" + proto.MessageName(msg)
+	// Use proto.MessageName to get the type name
+	msgName := proto.MessageName(msg)
+	if msgName != "" {
+		return "/" + msgName
 	}
 	
-	// Fallback: construct type URL from message name
-	return "/" + proto.MessageName(msg)
+	// Fallback: try to get from interface registry
+	// This is a simplified approach for v0.50 compatibility
+	return "/" + fmt.Sprintf("%T", msg)
 }
 
 // MustMarshalJSON marshals to JSON or panics
