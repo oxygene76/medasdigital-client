@@ -47,23 +47,33 @@ func (m *Manager) AnalyzeOrbitalDynamics(inputFile string) (*types.AnalysisResul
 
 	// Create analysis result
 	analysisResult := &types.AnalysisResult{
-		ID:        fmt.Sprintf("orbital_%d", time.Now().Unix()),
-		Type:      "orbital_dynamics",
-		Status:    "completed",
-		Results:   map[string]interface{}{"orbital_analysis": result},
-		Timestamp: time.Now(),
-		Duration:  time.Since(start),
-		Metadata: types.AnalysisMetadata{
-			InputFiles: []string{inputFile},
-			Parameters: map[string]interface{}{
-				"num_objects": len(objects),
-				"analysis_method": "n_body_simulation",
-			},
-			GPUUsed:      m.gpuManager != nil && m.gpuManager.IsEnabled(),
-			Version:      "1.0.0",
+		AnalysisType: "orbital_dynamics",
+		Data: map[string]interface{}{
+			"id":              fmt.Sprintf("orbital_%d", time.Now().Unix()),
+			"type":            "orbital_dynamics", 
+			"status":          "completed",
+			"orbital_analysis": result,
+			"duration":        time.Since(start),
 		},
+		Metadata: map[string]string{
+			"input_files":     inputFile,
+			"num_objects":     fmt.Sprintf("%d", len(objects)),
+			"analysis_method": "n_body_simulation",
+			"version":         "1.0.0",
+		},
+		Timestamp: time.Now(),
+		ClientID:  "",
+		BlockHeight: 0,
+		TxHash:    "",
 	}
 
+	// Add GPU info if available
+	if m.gpuManager != nil && m.gpuManager.IsInitialized() {
+		analysisResult.Metadata["gpu_used"] = "true"
+		analysisResult.Metadata["gpu_devices"] = fmt.Sprintf("%d", m.gpuManager.GetDeviceCount())
+	} else {
+		analysisResult.Metadata["gpu_used"] = "false"
+	}
 	if m.gpuManager != nil && m.gpuManager.IsEnabled() {
 		analysisResult.Metadata.GPUDevices = m.gpuManager.GetConfiguredDevices()
 	}
