@@ -2,17 +2,12 @@ package blockchain
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
-	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	comethttp "github.com/cometbft/cometbft/rpc/client/http"
 	comet "github.com/cometbft/cometbft/rpc/core/types"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -270,9 +265,9 @@ func (c *Client) StartEventMonitoring() error {
 
 	// Cast client to CometBFT HTTP client for event subscription
 	if httpClient, ok := c.clientCtx.Client.(*comethttp.HTTP); ok {
-		// Subscribe to events
+		// Subscribe to events - FIXED: Handle 2 return values
 		query := "tm.event='NewBlock'"
-		err := httpClient.Subscribe(context.Background(), "medas-client", query, 100)
+		_, err := httpClient.Subscribe(context.Background(), "medas-client", query, 100)
 		if err != nil {
 			return fmt.Errorf("failed to subscribe to events: %w", err)
 		}
