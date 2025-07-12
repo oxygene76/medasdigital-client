@@ -11,6 +11,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+    	"github.com/cosmos/cosmos-sdk/client"
+    	"github.com/cosmos/cosmos-sdk/codec"
+    	"github.com/cosmos/cosmos-sdk/codec/legacy"
+    	"github.com/cosmos/cosmos-sdk/crypto/hd"
+    	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+    	"github.com/cosmos/cosmos-sdk/std"
+    	
 	"github.com/cosmos/cosmos-sdk/client/keys"
 
 	medasClient "github.com/oxygene76/medasdigital-client/pkg/client"
