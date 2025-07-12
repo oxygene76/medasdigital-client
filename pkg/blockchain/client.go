@@ -147,6 +147,52 @@ func (c *Client) DeactivateClient(creator, clientID string) error {
 	return nil
 }
 
+// Fügen Sie Debug-Informationen in sendTransaction hinzu:
+
+func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxResponse, error) {
+	fmt.Printf("🔧 sendTransaction called with signer: %s\n", signerName)
+	
+	// Create transaction builder
+	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
+	if err := txBuilder.SetMsgs(msg); err != nil {
+		return nil, fmt.Errorf("failed to set messages: %w", err)
+	}
+	
+	fmt.Println("🔧 Setting fixed gas limit (no estimation)")
+	// Set fixed gas limit - NO ESTIMATION
+	txBuilder.SetGasLimit(200000)
+	
+	fmt.Println("🔧 Setting fee amount")
+	// Set fee
+	fees := sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(5000)))
+	txBuilder.SetFeeAmount(fees)
+
+	fmt.Printf("🔧 Signing transaction with: %s\n", signerName)
+	// Sign transaction
+	err := tx.Sign(context.Background(), c.txFactory, signerName, txBuilder, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign transaction: %w", err)
+	}
+
+	fmt.Println("🔧 Encoding transaction")
+	// Encode transaction
+	txBytes, err := c.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode transaction: %w", err)
+	}
+
+	fmt.Println("🔧 Broadcasting transaction")
+	// Broadcast transaction
+	res, err := c.clientCtx.BroadcastTx(txBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to broadcast transaction: %w", err)
+	}
+
+	fmt.Println("✅ Transaction sent successfully!")
+	return res, nil
+}
+
+/*
 // sendTransaction signs and broadcasts a transaction
 func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxResponse, error) {
 	// Create transaction builder
@@ -187,7 +233,7 @@ func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxRespons
 
 	return res, nil
 }
-
+*/
 // estimateGas estimates gas for a transaction - FIXED: Handle 3 return values
 func (c *Client) estimateGas(msgs []sdk.Msg) (uint64, error) {
 	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
