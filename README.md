@@ -16,7 +16,7 @@ The MedasDigital Client is a specialized tool designed to perform distributed as
 - **Local storage**: Automatic backup of registrations in JSON format
 
 **Latest Success**: Client ID `client-071be41f` successfully registered on block 3,565,770
-Transaction: [393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF](https://explorer.medas-digital.io/tx/393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF)
+Transaction: [393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF](https://explorer.medas-digital.io:3100/medasdigital/tx/393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF)
 
 ### 🚧 **In Development - Scientific Analysis**
 - **Orbital dynamics analysis**: Framework planned, not yet implemented
