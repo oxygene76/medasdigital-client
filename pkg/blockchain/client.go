@@ -30,7 +30,7 @@ func NewClient(clientCtx client.Context) *Client {
 	
 	// Ensure TxConfig is properly set in clientCtx
 	if clientCtx.TxConfig == nil {
-		clientCtx = clientCtx.WithTxConfig(codec.GetMarshaler().(codec.Codec))
+		clientCtx = clientCtx.WithTxConfig(codec.GetTxConfig())
 	}
 	
 	// Create transaction factory with proper configuration
