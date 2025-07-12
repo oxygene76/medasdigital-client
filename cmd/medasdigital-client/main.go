@@ -364,7 +364,7 @@ var checkAccountCmd = &cobra.Command{
 			WithInterfaceRegistry(globalInterfaceRegistry)
 		
 		// Parse address for validation
-		_, err := sdk.AccAddressFromBech32(address)
+		_, err = sdk.AccAddressFromBech32(address)
 		if err != nil {
 			return fmt.Errorf("invalid address format: %w", err)
 		}
