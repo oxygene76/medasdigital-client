@@ -10,6 +10,12 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 )
 
+var (
+	// Global registry to avoid duplicate registrations
+	globalInterfaceRegistry types.InterfaceRegistry
+	globalRegistryInitialized bool
+)
+
 // Codec handles encoding/decoding for blockchain operations
 type Codec struct {
 	marshaler         codec.Codec
@@ -27,14 +33,18 @@ type CodecConfig struct {
 
 // NewCodec creates a new codec with default configuration
 func NewCodec() *Codec {
-	interfaceRegistry := types.NewInterfaceRegistry()
-	RegisterInterfaces(interfaceRegistry)
+	// Use global registry to avoid duplicate registrations
+	if !globalRegistryInitialized {
+		globalInterfaceRegistry = types.NewInterfaceRegistry()
+		RegisterInterfaces(globalInterfaceRegistry)
+		globalRegistryInitialized = true
+	}
 	
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(globalInterfaceRegistry)
 	
 	return &Codec{
 		marshaler:         marshaler,
-		interfaceRegistry: interfaceRegistry,
+		interfaceRegistry: globalInterfaceRegistry,
 		addressCodec:      NewBech32AddressCodec("medas"),
 		config: CodecConfig{
 			Bech32Prefix:   "medas",
@@ -46,14 +56,18 @@ func NewCodec() *Codec {
 
 // NewCodecWithConfig creates a new codec with custom configuration
 func NewCodecWithConfig(config CodecConfig) *Codec {
-	interfaceRegistry := types.NewInterfaceRegistry()
-	RegisterInterfaces(interfaceRegistry)
+	// Use global registry to avoid duplicate registrations
+	if !globalRegistryInitialized {
+		globalInterfaceRegistry = types.NewInterfaceRegistry()
+		RegisterInterfaces(globalInterfaceRegistry)
+		globalRegistryInitialized = true
+	}
 	
-	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	marshaler := codec.NewProtoCodec(globalInterfaceRegistry)
 	
 	return &Codec{
 		marshaler:         marshaler,
-		interfaceRegistry: interfaceRegistry,
+		interfaceRegistry: globalInterfaceRegistry,
 		addressCodec:      NewBech32AddressCodec(config.Bech32Prefix),
 		config:            config,
 	}
@@ -134,7 +148,7 @@ func (c *Codec) ValidateAddress(addr string) error {
 
 // RegisterInterfaces registers the interfaces for protobuf
 func RegisterInterfaces(registry types.InterfaceRegistry) {
-	// Register message implementations
+	// Register all message types in one call
 	registry.RegisterImplementations(
 		(*sdk.Msg)(nil),
 		&MsgRegisterClient{},
