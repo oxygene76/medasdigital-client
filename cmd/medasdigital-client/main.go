@@ -1,27 +1,32 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"context" 
+	"time"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-    	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/types"  // ← NEU HINZUFÜGEN
+	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/std"
-	"github.com/cosmos/cosmos-sdk/client/tx"
-    	"github.com/cosmos/cosmos-sdk/client/flags"
-	"time"  // ← NEU für timestamp
-	blockchain "github.com/oxygene76/medasdigital-client/pkg/blockchain"  
+	
+	// ✅ KORREKTE v0.50 IMPORTS für echte Blockchain-Kommunikation:
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"           // Für TxConfig
+	"github.com/cosmos/cosmos-sdk/client/flags"              // Für BroadcastMode
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"    // Für AccountRetriever
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"          // Für SignModes
 
+	blockchain "github.com/oxygene76/medasdigital-client/pkg/blockchain"  // Wieder hinzufügen
 	medasClient "github.com/oxygene76/medasdigital-client/pkg/client"
 )
 
@@ -215,44 +220,68 @@ a unique client ID and registers the client's capabilities.`,
 		fmt.Printf("🔍 Testing connection to %s...\n", cfg.Chain.RPCEndpoint)
 		
 		if err := testBlockchainConnection(cfg.Chain.RPCEndpoint); err != nil {
-		fmt.Printf("⚠️  Blockchain connection failed: %v\n", err)
-    		fmt.Println("💡 Running in simulation mode...")
-    		return simulateRegistration(from, addr.String(), capabilities, metadata)
-		}
+    fmt.Printf("⚠️  Blockchain connection failed: %v\n", err)
+    fmt.Println("💡 Running in simulation mode...")
+    return simulateRegistration(from, addr.String(), capabilities, metadata)
+}
 
-		fmt.Println("✅ Blockchain connection successful!")
-		fmt.Println("📡 Sending real transaction to blockchain...")
+fmt.Println("✅ Blockchain connection successful!")
+fmt.Println("🔗 Connected to:", cfg.Chain.RPCEndpoint)
+fmt.Println("⛓️  Chain ID:", cfg.Chain.ID)
 
-		// Create blockchain client with proper context
-		blockchainClient, err := createFullBlockchainClient(clientCtx, cfg)
-		if err != nil {
-    			fmt.Printf("❌ Failed to create blockchain client: %v\n", err)
-    			fmt.Println("💡 Falling back to simulation...")
-    			return simulateRegistration(from, addr.String(), capabilities, metadata)
-		}
+// ✅ ECHTE BLOCKCHAIN-REGISTRIERUNG
+fmt.Println("📡 Creating blockchain client for real transaction...")
 
-		// Prepare metadata
-		metadataMap := make(map[string]interface{})
-		if metadata != "" {
-    			metadataMap["description"] = metadata
-		}
-		metadataMap["timestamp"] = time.Now().Unix()
-		metadataMap["client_version"] = version
+// Create blockchain client with complete context
+blockchainClient, err := createFullBlockchainClient(clientCtx, cfg)
+if err != nil {
+    fmt.Printf("❌ Failed to create blockchain client: %v\n", err)
+    fmt.Println("💡 Falling back to simulation...")
+    return simulateRegistration(from, addr.String(), capabilities, metadata)
+}
 
-		// ✅ REAL BLOCKCHAIN REGISTRATION
-		clientID, err := blockchainClient.RegisterClient(addr.String(), capabilities, metadataMap)
-		if err != nil {
-    			fmt.Printf("❌ Blockchain registration failed: %v\n", err)
-    			fmt.Println("💡 Falling back to simulation...")
-    			return simulateRegistration(from, addr.String(), capabilities, metadata)
-		}
+// Prepare metadata
+metadataMap := make(map[string]interface{})
+if metadata != "" {
+    metadataMap["description"] = metadata
+}
+metadataMap["timestamp"] = time.Now().Unix()
+metadataMap["client_version"] = version
+metadataMap["registration_type"] = "client_registration"
 
-		fmt.Println("🎉 Client successfully registered on blockchain!")
-		fmt.Printf("🆔 Client ID: %s\n", clientID)
-		fmt.Printf("📍 Address: %s\n", addr.String())
-		fmt.Printf("🔧 Capabilities: %v\n", capabilities)
+fmt.Println("🚀 Sending registration transaction to blockchain...")
+fmt.Printf("📍 From: %s\n", addr.String())
+fmt.Printf("🔧 Capabilities: %v\n", capabilities)
 
-		return nil
+// ✅ ECHTE BLOCKCHAIN-REGISTRIERUNG
+clientID, err := blockchainClient.RegisterClient(addr.String(), capabilities, metadataMap)
+if err != nil {
+    fmt.Printf("❌ Blockchain registration failed: %v\n", err)
+    fmt.Println("💡 This might be due to:")
+    fmt.Println("   • Insufficient funds for transaction fees")
+    fmt.Println("   • Chain not accepting transactions")
+    fmt.Println("   • Network connectivity issues")
+    fmt.Println("\n💡 Falling back to simulation...")
+    return simulateRegistration(from, addr.String(), capabilities, metadata)
+}
+
+// ✅ SUCCESS!
+fmt.Println("\n🎉 CLIENT SUCCESSFULLY REGISTERED ON BLOCKCHAIN!")
+fmt.Println("=" + strings.Repeat("=", 50))
+fmt.Printf("🆔 Client ID: %s\n", clientID)
+fmt.Printf("📍 Address: %s\n", addr.String())
+fmt.Printf("⛓️  Chain: %s\n", cfg.Chain.ID)
+fmt.Printf("🔧 Capabilities: %v\n", capabilities)
+fmt.Printf("🕒 Registered: %s\n", time.Now().Format("2006-01-02 15:04:05"))
+
+if metadata != "" {
+    fmt.Printf("📋 Metadata: %s\n", metadata)
+}
+
+fmt.Println("=" + strings.Repeat("=", 50))
+fmt.Println("✅ Your client is now active on the MedasDigital network!")
+
+return nil
 
 	},
 }
@@ -861,6 +890,8 @@ func initKeysClientContextWithBackend(keyringBackend string) (client.Context, er
 	return clientCtx, nil
 }
 
+// Vollständige createFullBlockchainClient Funktion für main.go:
+
 func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockchain.Client, error) {
 	// Create RPC client
 	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
@@ -876,8 +907,15 @@ func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockch
 		globalCodec = codec.NewProtoCodec(globalInterfaceRegistry)
 	}
 	
-	// Create TxConfig using our global codec
-	txConfig := tx.NewTxConfig(globalCodec, tx.DefaultSignModes)
+	// Create TxConfig using v0.50 API
+	txConfig := authtx.NewTxConfig(globalCodec, []signing.SignMode{
+		signing.SignMode_SIGN_MODE_DIRECT,
+		signing.SignMode_SIGN_MODE_TEXTUAL,
+		signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON,
+	})
+	
+	// Create AccountRetriever
+	accountRetriever := authtypes.AccountRetriever{}
 	
 	// Create complete client context with all required components
 	fullClientCtx := clientCtx.
@@ -886,12 +924,15 @@ func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockch
 		WithCodec(globalCodec).
 		WithInterfaceRegistry(globalInterfaceRegistry).
 		WithTxConfig(txConfig).
+		WithAccountRetriever(accountRetriever).
 		WithNodeURI(cfg.Chain.RPCEndpoint).
 		WithOffline(false).
 		WithGenerateOnly(false).
 		WithSimulation(false).
 		WithUseLedger(false).
-		WithBroadcastMode(flags.BroadcastSync)
+		WithBroadcastMode(flags.BroadcastSync).
+		WithFromName(clientCtx.GetFromName()).
+		WithFromAddress(clientCtx.GetFromAddress())
 	
 	// Create blockchain client
 	blockchainClient := blockchain.NewClient(fullClientCtx)
