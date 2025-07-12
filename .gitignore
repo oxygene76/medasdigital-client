@@ -23,3 +23,6 @@ Thumbs.db
 # Config
 config.yaml
 *.key
+/bin/
+/build/
+.medasdigital-client/
