@@ -10,6 +10,10 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 	"github.com/cosmos/cosmos-sdk/client"        // für client.TxConfig
 	"github.com/cosmos/cosmos-sdk/client/tx"    
+
+	"github.com/cosmos/cosmos-sdk/x/auth/tx"           // Statt client/tx
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"   // Alias für bessere Klarheit
+	"github.com/cosmos/cosmos-sdk/types/tx/signing" 
 )
 
 var (
@@ -44,7 +48,11 @@ func NewCodec() *Codec {
 	}
 	
 	marshaler := codec.NewProtoCodec(globalInterfaceRegistry)
-	txConfig := tx.NewTxConfig(marshaler, tx.DefaultSignModes)  // ← NEU
+	txConfig := authtx.NewTxConfig(marshaler, []signing.SignMode{
+	signing.SignMode_SIGN_MODE_DIRECT,
+	signing.SignMode_SIGN_MODE_TEXTUAL,
+	signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON,
+	})
 	
 	return &Codec{
 		marshaler:         marshaler,
