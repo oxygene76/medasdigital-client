@@ -6,45 +6,46 @@ A distributed astronomical analysis client for the search of Planet 9 and other 
 
 The MedasDigital Client is a specialized tool designed to perform distributed astronomical data analysis for the ongoing search for Planet 9 and other distant objects in our solar system. Built on the MedasDigital blockchain, it enables researchers to contribute computational resources while maintaining transparent, verifiable, and immutable records of analysis results.
 
+## 🎉 Current Status - **BLOCKCHAIN INFRASTRUCTURE COMPLETE**
+
+### ✅ **Fully Functional - Blockchain Integration**
+- **Real blockchain transactions**: Successfully tested on MedasDigital mainnet
+- **Client registration**: Working registration system with permanent client IDs  
+- **Key management**: Full key lifecycle management (create, recover, list, delete)
+- **Account verification**: Comprehensive blockchain account status checking
+- **Local storage**: Automatic backup of registrations in JSON format
+
+**Latest Success**: Client ID `client-071be41f` successfully registered on block 3,565,770
+Transaction: [393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF](https://explorer.medas-digital.io/tx/393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF)
+
+### 🚧 **In Development - Scientific Analysis**
+- **Orbital dynamics analysis**: Framework planned, not yet implemented
+- **Photometric processing**: Data structures designed, processing pipeline in development  
+- **GPU acceleration**: Infrastructure ready, analysis algorithms pending
+- **AI/ML integration**: Architecture planned, models not yet trained
+- **Survey data processing**: Format support planned, automation pending
+
+**Current Focus**: Building the scientific analysis pipeline on top of the proven blockchain foundation.
+
 ## 🔬 Scientific Background
 
-Planet 9 is a hypothetical planet in the outer reaches of our solar system, first proposed based on the unusual clustering of orbits of several trans-Neptunian objects (TNOs). **Status Update (2025):** We are currently in the foundation phase, having completed the core blockchain infrastructure and network setup. The client development is just beginning, with focus on integrating our NVIDIA GPU infrastructure for advanced astronomical computations and AI-powered analysis capabilities.
+Planet 9 is a hypothetical planet in the outer reaches of our solar system, first proposed based on the unusual clustering of orbits of several trans-Neptunian objects (TNOs). This client provides the foundation infrastructure for distributed analysis of astronomical data.
 
-This client will help in:
+This client currently provides:
+- **✅ Blockchain Foundation**: Complete client registration and identity management
+- **✅ Network Integration**: Full MedasDigital blockchain connectivity
+- **✅ Capability Declaration**: Register your intended analysis capabilities
+- **🚧 Analysis Pipeline**: Scientific algorithms in active development
+- **🚧 Data Processing**: Astronomical data formats and processing (planned)
+- **🚧 GPU Acceleration**: Hardware integration framework (in progress)
 
-- **Orbital Dynamics Analysis**: Computing gravitational influences and orbital perturbations
-- **Sky Survey Data Processing**: Analyzing telescope observations for moving objects
-- **Statistical Clustering**: Identifying patterns in TNO orbital elements
-- **Photometric Analysis**: Processing brightness measurements and light curves
-- **Astrometric Verification**: Validating object positions and motion vectors
-
-## 🚀 Features
-
-### Core Capabilities
-- **Distributed Processing**: Leverage blockchain network for computational work
-- **Verifiable Results**: All analysis results are cryptographically signed and stored on-chain
-- **Multi-Survey Support**: Compatible with data from various astronomical surveys
-- **Real-time Updates**: Continuous processing of new observational data
-- **Collaborative Research**: Enable multiple institutions to contribute and verify findings
-
-### Analysis Types
-- `orbital_dynamics`: Gravitational simulation and orbit determination (GPU-accelerated)
-- `photometric_analysis`: Brightness measurements and variability studies
-- `astrometric_validation`: Position and proper motion verification
-- `clustering_analysis`: Statistical analysis using GPU-accelerated ML algorithms
-- `survey_processing`: Automated processing of sky survey data with neural networks
-- `anomaly_detection`: Deep learning-based detection using NVIDIA GPU infrastructure
-- `ai_training`: Custom model training for astronomical object classification
-- `gpu_compute`: High-performance numerical computations for orbital mechanics
-
-## 🛠️ Installation
+## 🛠️ Installation & Build
 
 ### Prerequisites
-- Go 1.21 or later
-- Access to a MedasDigital blockchain node
-- NVIDIA GPU with CUDA support (recommended: RTX 3090 or newer)
-- CUDA Toolkit 12.0 or later
-- Astronomical data files (FITS, CSV, or JSON format)
+- **Go 1.21** or later
+- **Git** for cloning the repository
+- **Make** for building
+- **Access** to MedasDigital blockchain RPC endpoint
 
 ### Quick Start
 
@@ -59,229 +60,306 @@ go mod download
 # Build the client
 make build
 
-# Initialize configuration
-./bin/medasdigital-client init --chain-id medasdigital-2
+# Verify build
+./bin/medasdigital-client --version
 ```
 
-### Configuration
+### Build Commands
 
-Create a configuration file `config.yaml`:
+```bash
+# Build optimized binary
+make build
+
+# Build with debug information
+make build-debug
+
+# Run tests
+make test
+
+# Clean build artifacts
+make clean
+
+# Install to system PATH
+make install
+```
+
+## ⚙️ Configuration
+
+### Initialize Client
+
+```bash
+# Initialize configuration
+./bin/medasdigital-client init
+```
+
+This creates `~/.medasdigital-client/config.yaml`:
 
 ```yaml
 chain:
-  id: "medasdigital-2"
-  rpc_endpoint: "https://rpc.medas-digital.io:26657"
-  
+  chain_id: medasdigital-2
+  rpc_endpoint: https://rpc.medas-digital.io:26657
+  bech32_prefix: medas
+  base_denom: umedas
 client:
+  keyring_dir: /home/user/.medasdigital-client/keyring
+  keyring_backend: test
   capabilities:
-    - "orbital_dynamics"
-    - "photometric_analysis" 
-    - "astrometric_validation"
-    - "ai_training"
-    - "gpu_compute"
-  
-analysis:
-  data_sources:
-    - "/path/to/survey/data"
-    - "https://api.minorplanetcenter.net/data"
-  
-resources:
-  max_cpu_cores: 4
-  max_memory_gb: 8
-  storage_path: "./analysis_cache"
-  
+    - orbital_dynamics
+    - photometric_analysis
 gpu:
-  enabled: true
-  cuda_devices: [0, 1]  # Available NVIDIA GPU devices
-  memory_limit_gb: 24   # Per GPU memory limit
-  compute_capability: "8.6"  # RTX 3090/4090 or similar
+  enabled: false
+  device_id: 0
+  memory_limit: 8192
+```
+
+## 🔑 Key Management
+
+### Create Your Identity
+
+```bash
+# Create a new key (generates mnemonic)
+./bin/medasdigital-client keys add MyAnalysisNode
+
+# Or recover from existing mnemonic
+./bin/medasdigital-client keys add MyAnalysisNode --recover
+
+# List all keys
+./bin/medasdigital-client keys list
+
+# Show specific key details
+./bin/medasdigital-client keys show MyAnalysisNode
 ```
 
 ## 📊 Usage
 
-### Register Your Analysis Node
+### 1. Register Your Analysis Node
 
 ```bash
-# Register your client on the blockchain
+# Register on the blockchain with default capabilities
+./bin/medasdigital-client register --from MyAnalysisNode
+
+# Register with custom capabilities and metadata
 ./bin/medasdigital-client register \
-  --capabilities orbital_dynamics,photometric_analysis,ai_training,gpu_compute \
-  --metadata "Institution: Your Observatory, GPU: NVIDIA RTX 4090" \
-  --from your-wallet-key
+  --from MyAnalysisNode \
+  --capabilities orbital_dynamics,photometric_analysis,ai_training \
+  --metadata "Institution: Your Observatory, Location: Chile"
+
+# Register with manual gas limit
+./bin/medasdigital-client register \
+  --from MyAnalysisNode \
+  --gas 200000
 ```
 
-### Process Astronomical Data
-
-```bash
-# Analyze TNO orbital elements
-./bin/medasdigital-client analyze orbital-dynamics \
-  --input data/tno_elements.csv \
-  --output results/orbital_analysis.json
-
-# Process photometric observations
-./bin/medasdigital-client analyze photometric \
-  --survey-data data/survey_observations.fits \
-  --target-list data/candidates.txt
-
-# Run clustering analysis
-./bin/medasdigital-client analyze clustering \
-  --min-inclination 15 \
-  --max-semimajor-axis 150 \
-  --clustering-algorithm kmeans
+**Successful Registration Output:**
+```
+🎉 CLIENT SUCCESSFULLY REGISTERED ON BLOCKCHAIN!
+===================================================
+🆔 Client ID: client-071be41f
+📍 Address: medas1y0n5v8m0jn0mp37vp74qjq3nfk7zf6ahsgywwr
+⛓️  Chain: medasdigital-2
+🔧 Capabilities: [orbital_dynamics photometric_analysis]
+📊 Transaction Hash: 393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF
+🏔️  Block Height: 3565770
+💾 Registration saved to: ~/.medasdigital-client/registrations/
+===================================================
 ```
 
-### Monitor Analysis Results
+### 2. Verify Your Account
 
 ```bash
-# Check your client status
+# Check account status on blockchain
+./bin/medasdigital-client check-account --from MyAnalysisNode
+
+# Or check specific address
+./bin/medasdigital-client check-account medas1y0n5v8m0jn0mp37vp74qjq3nfk7zf6ahsgywwr
+```
+
+### 3. Monitor Status
+
+```bash
+# Check client status
 ./bin/medasdigital-client status
 
-# View recent analysis results
-./bin/medasdigital-client results --limit 10
-
-# Query specific analysis by ID
-./bin/medasdigital-client query analysis abc123...
+# Check blockchain connection
+./bin/medasdigital-client check-account --from MyAnalysisNode
 ```
 
-## 🔬 Analysis Workflows
+## 📁 Local Storage
 
-### 1. Orbital Dynamics Analysis
+### Registration Files
+
+Your registrations are automatically saved locally:
 
 ```bash
-# Simulate gravitational effects of hypothetical Planet 9
-./bin/medasdigital-client analyze orbital-dynamics \
-  --planet9-mass 10 \           # Earth masses
-  --planet9-distance 600 \      # AU
-  --planet9-inclination 30 \    # degrees
-  --integration-time 10000 \    # years
-  --tno-catalog data/known_tnos.csv
+# View your registration
+cat ~/.medasdigital-client/registrations/registration-client-071be41f.json
+
+# View all registrations index
+cat ~/.medasdigital-client/registrations/index.json
+
+# List all registration files
+ls -la ~/.medasdigital-client/registrations/
 ```
 
-### 2. Survey Data Processing
+### Registration Data Format
 
-```bash
-# Process new observations from sky surveys
-./bin/medasdigital-client process survey \
-  --survey DECam \
-  --observation-date 2024-01-15 \
-  --field-coordinates "12h34m56s -15d23m45s" \
-  --detection-threshold 5.0
-```
-
-### 3. GPU-Accelerated Machine Learning
-
-```bash
-# Train deep learning model for object detection using NVIDIA GPU
-./bin/medasdigital-client train deep-detector \
-  --training-data data/labeled_objects.h5 \
-  --model-architecture resnet50 \
-  --gpu-devices 0,1 \
-  --batch-size 32 \
-  --epochs 100
-
-# Apply trained model for large-scale detection
-./bin/medasdigital-client detect objects \
-  --model models/deep_detector.pth \
-  --survey-images data/decam_survey/ \
-  --gpu-acceleration true \
-  --detection-threshold 0.95
-```
-
-## 📈 Data Formats
-
-### Input Data Formats
-
-**TNO Orbital Elements (CSV)**
-```csv
-designation,semimajor_axis,eccentricity,inclination,longitude_node,argument_periapsis,mean_anomaly,epoch
-2012VP113,261.0,0.69,24.1,90.8,293.9,25.4,2457000.5
-2015TG387,1190.0,0.89,11.9,38.4,178.2,109.1,2457000.5
-```
-
-**Photometric Observations (JSON)**
 ```json
 {
-  "observations": [
-    {
-      "object_id": "2012VP113",
-      "mjd": 59580.5,
-      "magnitude": 23.1,
-      "filter": "r",
-      "observatory": "DECam",
-      "uncertainty": 0.05
-    }
-  ]
+  "transaction_hash": "393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF",
+  "client_id": "client-071be41f",
+  "registration_data": {
+    "client_address": "medas1y0n5v8m0jn0mp37vp74qjq3nfk7zf6ahsgywwr",
+    "capabilities": ["orbital_dynamics", "photometric_analysis"],
+    "metadata": "Institution: Your Observatory",
+    "timestamp": "2025-07-12T17:44:20.338470471Z",
+    "version": "1.0.0"
+  },
+  "block_height": 3565770,
+  "registered_at": "2025-07-12T17:44:20Z"
 }
 ```
 
-### Output Data Formats
+## 🔧 Advanced Usage
 
-**Analysis Results**
-```json
-{
-  "analysis_id": "abc123...",
-  "client_id": "medasdigital-client-001",
-  "analysis_type": "orbital_dynamics",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "results": {
-    "planet9_probability": 0.85,
-    "clustering_significance": 4.2,
-    "affected_objects": ["2012VP113", "2015TG387"],
-    "recommended_observations": [
-      {
-        "ra": "12h34m56s",
-        "dec": "-15d23m45s",
-        "priority": "high"
-      }
-    ]
-  }
-}
+### Custom Configuration
+
+```bash
+# Use custom config file
+./bin/medasdigital-client --config /path/to/config.yaml register --from MyKey
+
+# Use custom home directory
+./bin/medasdigital-client --home /path/to/data register --from MyKey
+
+# Use different keyring backend
+./bin/medasdigital-client register --from MyKey --keyring-backend file
 ```
 
-## 🤝 Contributing
+### Development Mode
 
-### For Astronomers
-1. **Data Contribution**: Share observational data and object catalogs
-2. **Analysis Validation**: Verify computational results and methodologies
-3. **Scientific Review**: Peer review of analysis algorithms and findings
+```bash
+# Build with debug info
+make build-debug
 
-### For Developers
-1. **Algorithm Implementation**: Develop new analysis methods
-2. **Performance Optimization**: Improve computational efficiency
-3. **Integration Support**: Add support for new data formats and surveys
+# Run with verbose logging
+./bin/medasdigital-client register --from MyKey --verbose
 
-### For Institutions
-1. **Computational Resources**: Contribute processing power to the network
-2. **Data Access**: Provide access to proprietary survey data
-3. **Funding Support**: Support development and maintenance
+# Test configuration
+./bin/medasdigital-client config validate
+```
 
-## 🏛️ Scientific Institutions
+## 🌐 Network Configuration
 
-### Current Partners
-- Minor Planet Center (MPC)
-- Catalina Sky Survey (CSS)
-- Dark Energy Survey (DES)
-- Zwicky Transient Facility (ZTF)
+### Mainnet (Default)
+- **Chain ID**: `medasdigital-2`
+- **RPC Endpoint**: `https://rpc.medas-digital.io:26657`
+- **Explorer**: `https://explorer.medas-digital.io`
+- **Denomination**: `umedas` (micro-medas)
 
-### Data Sources
-- **MPC Database**: Orbital elements and observations
-- **JPL Horizons**: Ephemeris and orbital data
-- **NEOWISE**: Infrared observations
-- **Gaia**: Astrometric measurements
+### Gas and Fees
+- **Recommended Gas**: 200,000 for registration
+- **Fee Calculation**: Automatic (minimum 5,000 umedas)
+- **Typical Cost**: ~0.005 MEDAS per registration
 
-## 📚 Documentation
+## 🚀 Future Features (Roadmap)
 
-- [Installation Guide](docs/installation.md)
-- [Analysis Methods](docs/analysis_methods.md)
-- [API Reference](docs/api_reference.md)
-- [Data Formats](docs/data_formats.md)
-- [Scientific Background](docs/scientific_background.md)
+### Phase 1: Foundation ✅ **COMPLETED**
+- [x] Blockchain integration with Cosmos SDK v0.50.10
+- [x] Client registration system with permanent on-chain storage
+- [x] Comprehensive key management and security
+- [x] Local storage and backup systems
+- [x] Account verification and status checking
+- [x] Gas optimization and fee calculation
 
-## 🔐 Security and Verification
+### Phase 2: Analysis Framework 🚧 **IN DEVELOPMENT**
+- [ ] Orbital dynamics analysis pipeline
+- [ ] Photometric data processing modules
+- [ ] GPU acceleration integration (CUDA/OpenCL)
+- [ ] AI/ML model framework integration
+- [ ] Distributed computation coordination
+- [ ] Data format standardization (FITS, CSV, JSON)
 
-- All analysis results are cryptographically signed
-- Computational methods are open-source and peer-reviewed
-- Blockchain ensures immutable record of all findings
-- Multi-institutional verification of significant discoveries
+### Phase 3: Advanced Analytics 📋 **PLANNED**
+- [ ] Real-time survey data processing
+- [ ] Collaborative analysis verification system
+- [ ] Multi-institutional data sharing protocols
+- [ ] Publication-ready result generation
+- [ ] Integration with major observatories and surveys
+
+## 🛠️ Development
+
+### Build from Source
+
+```bash
+# Clone repository
+git clone https://github.com/oxygene76/medasdigital-client.git
+cd medasdigital-client
+
+# Install dependencies
+go mod tidy
+
+# Run tests
+go test -v ./...
+
+# Build
+make build
+
+# Install locally
+make install
+```
+
+### Project Structure
+
+```
+medasdigital-client/
+├── cmd/medasdigital-client/    # Main application
+├── pkg/
+│   ├── client/                 # Client logic
+│   ├── blockchain/             # Blockchain integration
+│   ├── analysis/               # Analysis algorithms
+│   └── gpu/                    # GPU acceleration
+├── internal/types/             # Internal types
+├── Makefile                    # Build configuration
+├── go.mod                      # Go dependencies
+└── README.md                   # This file
+```
+
+## 🔐 Security
+
+- **Keyring Security**: Uses Cosmos SDK keyring with multiple backend options
+- **Transaction Signing**: All transactions are cryptographically signed
+- **Local Storage**: Registration data backed up locally in JSON format
+- **Blockchain Verification**: All registrations are permanently stored on-chain
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Key not found:**
+```bash
+# Create a key first
+./bin/medasdigital-client keys add MyAnalysisNode
+```
+
+**Insufficient funds:**
+```bash
+# Check account status
+./bin/medasdigital-client check-account --from MyAnalysisNode
+# Ensure your account has umedas tokens for transaction fees
+```
+
+**Connection issues:**
+```bash
+# Test blockchain connection
+curl -s https://rpc.medas-digital.io:26657/status
+```
+
+**Build issues:**
+```bash
+# Clean and rebuild
+make clean
+go mod tidy
+make build
+```
 
 ## 📄 License
 
@@ -291,54 +369,28 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Mike Brown** and **Konstantin Batygin** for the original Planet 9 hypothesis
 - **Minor Planet Center** for maintaining the TNO database
-- **Medas Digital** (medas-digital.io) for blockchain infrastructure
-- **Contributing observatories** for providing observational data
+- **Cosmos SDK** for blockchain infrastructure
+- **MedasDigital** for the blockchain network
 
 ## 📞 Contact
 
-- **Scientific Inquiries**: science@medas-digital.io
+- **Project Repository**: https://github.com/oxygene76/medasdigital-client
 - **Technical Support**: support@medas-digital.io
-- **Collaboration**: partnerships@medas-digital.io
-
-## 🚀 Roadmap
-
-### Phase 1: Foundation & Infrastructure (Q1-Q2 2025)
-- [ ] Basic client architecture and blockchain integration
-- [ ] Core capabilities registration system
-- [ ] Initial data processing pipeline for astronomical observations
-- [ ] Integration with NVIDIA GPU infrastructure for computational workloads
-- [ ] Basic orbital dynamics calculations using GPU acceleration
-
-### Phase 2: AI-Powered Analysis (Q3-Q4 2025)
-- [ ] Machine learning framework integration (PyTorch/TensorFlow with CUDA)
-- [ ] Neural network models for astronomical object detection
-- [ ] GPU-accelerated image processing for survey data
-- [ ] Automated anomaly detection using deep learning
-- [ ] Training pipeline for custom astronomical models
-
-### Phase 3: Advanced Analytics & Collaboration (Q1-Q2 2026)
-- [ ] Real-time survey data processing with GPU clusters
-- [ ] Distributed training across multiple NVIDIA GPUs
-- [ ] Advanced clustering algorithms for TNO orbital analysis
-- [ ] Collaborative verification system with institutional partners
-- [ ] API for external astronomical software integration
-
-### Phase 4: Production & Scale (Q3-Q4 2026)
-- [ ] Full sky survey integration (Rubin Observatory, Euclid)
-- [ ] High-performance computing cluster coordination
-- [ ] Automated follow-up observation recommendations
-- [ ] Publication-ready result validation and peer review system
-- [ ] Real-time alert system for significant discoveries
-
-### Phase 5: Discovery & Scientific Impact (2027)
-- [ ] Large-scale deep learning models for Planet 9 detection
-- [ ] Multi-wavelength data fusion using AI
-- [ ] Predictive modeling for new TNO discoveries
-- [ ] Integration with space-based observatories
-- [ ] Scientific publication and discovery announcement system
+- **Scientific Inquiries**: science@medas-digital.io
+- **Blockchain Explorer**: https://explorer.medas-digital.io
 
 ---
 
-*"The search for Planet 9 represents one of the most exciting frontiers in solar system science. By combining cutting-edge computational methods with blockchain technology, we're building a transparent, verifiable, and collaborative approach to this monumental scientific endeavor."*
+**🚀 Ready to join the network infrastructure? Get started in 3 commands:**
 
-**Join the search. Contribute to discovery. Shape the future of astronomy.**
+```bash
+make build
+./bin/medasdigital-client init
+./bin/medasdigital-client keys add MyAnalysisNode
+./bin/medasdigital-client register --from MyAnalysisNode
+```
+
+*Join the distributed blockchain network for Planet 9 research - register your node and prepare for upcoming scientific analysis capabilities!*
+
+**📊 Current Capabilities**: Blockchain client registration and network participation  
+**🔬 Coming Soon**: Full astronomical analysis pipeline and GPU-accelerated computations
