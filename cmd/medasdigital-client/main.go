@@ -162,7 +162,6 @@ operation.`,
 	},
 }
 
-// registerCmd registers the client on the blockchain
 var registerCmd = &cobra.Command{
 	Use:   "register",
 	Short: "Register client on the blockchain",
@@ -209,50 +208,22 @@ a unique client ID and registers the client's capabilities.`,
 		
 		fmt.Printf("Using key '%s' with address: %s\n", from, addr.String())
 		
-		// ✅ USE REAL BLOCKCHAIN REGISTRATION
-		fmt.Println("🚀 Connecting to MedasDigital blockchain...")
+		// ✅ SICHERER ANSATZ: Test connection first, dann entscheiden
+		cfg := loadConfig()
+		fmt.Printf("🔍 Testing connection to %s...\n", cfg.Chain.RPCEndpoint)
 		
-		// Create blockchain client with proper client context
-		blockchainClient, err := createBlockchainClient(clientCtx)
-		if err != nil {
-			return fmt.Errorf("failed to create blockchain client: %w", err)
-		}
-		
-		// Test connection first
-		fmt.Println("🔍 Testing blockchain connection...")
-		if err := blockchainClient.Health(); err != nil {
+		if err := testBlockchainConnection(cfg.Chain.RPCEndpoint); err != nil {
 			fmt.Printf("⚠️  Blockchain connection failed: %v\n", err)
-			fmt.Println("💡 Falling back to simulation mode...")
+			fmt.Println("💡 Running in simulation mode...")
 			return simulateRegistration(from, addr.String(), capabilities, metadata)
 		}
 		
-		// Prepare metadata
-		metadataMap := make(map[string]interface{})
-		if metadata != "" {
-			metadataMap["description"] = metadata
-		}
-		metadataMap["timestamp"] = time.Now().Unix()
-		metadataMap["client_version"] = version
+		// Wenn Connection OK ist, aber wir noch keine vollständige Tx-Implementation haben
+		fmt.Println("✅ Blockchain connection successful!")
+		fmt.Println("📡 Full transaction support coming soon...")
+		fmt.Println("💡 Running enhanced simulation...")
 		
-		// ✅ REAL BLOCKCHAIN REGISTRATION
-		fmt.Println("📡 Sending registration transaction...")
-		clientID, err := blockchainClient.RegisterClient(addr.String(), capabilities, metadataMap)
-		if err != nil {
-			fmt.Printf("❌ Blockchain registration failed: %v\n", err)
-			fmt.Println("💡 Falling back to simulation mode...")
-			return simulateRegistration(from, addr.String(), capabilities, metadata)
-		}
-		
-		fmt.Println("✅ Client successfully registered on blockchain!")
-		fmt.Printf("🆔 Client ID: %s\n", clientID)
-		fmt.Printf("📍 Address: %s\n", addr.String())
-		fmt.Printf("🔧 Capabilities: %v\n", capabilities)
-		
-		if metadata != "" {
-			fmt.Printf("📋 Metadata: %s\n", metadata)
-		}
-		
-		return nil
+		return simulateRegistration(from, addr.String(), capabilities, metadata)
 	},
 }
 
@@ -858,16 +829,6 @@ func initKeysClientContextWithBackend(keyringBackend string) (client.Context, er
 	clientCtx = clientCtx.WithKeyring(kr)
 	
 	return clientCtx, nil
-}
-
-// Helper function to create blockchain client
-func createBlockchainClient(clientCtx client.Context) (*blockchain.Client, error) {
-	// Load config
-	cfg := loadConfig()
-	
-	// ⚠️ WARNUNG: Blockchain client creation ist komplex in v0.50
-	// Für jetzt returnen wir einen Fehler um graceful fallback zu aktivieren
-	return nil, fmt.Errorf("blockchain client creation not yet implemented for v0.50 - using simulation mode")
 }
 
 
