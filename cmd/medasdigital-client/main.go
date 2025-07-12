@@ -12,13 +12,12 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
     	"github.com/cosmos/cosmos-sdk/client"
-    	"github.com/cosmos/cosmos-sdk/codec"
-    	"github.com/cosmos/cosmos-sdk/codec/legacy"
-    	"github.com/cosmos/cosmos-sdk/crypto/hd"
-    	"github.com/cosmos/cosmos-sdk/crypto/keyring"
-    	"github.com/cosmos/cosmos-sdk/std"
-    	
-	"github.com/cosmos/cosmos-sdk/client/keys"
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/legacy"
+	"github.com/cosmos/cosmos-sdk/codec/types"  // ← NEU HINZUFÜGEN
+	"github.com/cosmos/cosmos-sdk/crypto/hd"
+	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	"github.com/cosmos/cosmos-sdk/std"
 
 	medasClient "github.com/oxygene76/medasdigital-client/pkg/client"
 )
@@ -51,8 +50,9 @@ type Config struct {
 		Bech32Prefix string `yaml:"bech32_prefix"`
 	} `yaml:"chain"`
 	Client struct {
-		KeyringDir   string   `yaml:"keyring_dir"`
-		Capabilities []string `yaml:"capabilities"`
+		KeyringDir     string   `yaml:"keyring_dir"`
+		KeyringBackend string   `yaml:"keyring_backend"`  // ← NEU HINZUFÜGEN
+		Capabilities   []string `yaml:"capabilities"`
 	} `yaml:"client"`
 	GPU struct {
 		Enabled     bool `yaml:"enabled"`
@@ -118,12 +118,14 @@ operation.`,
 				Bech32Prefix: defaultBech32Prefix,
 			},
 			Client: struct {
-				KeyringDir   string   `yaml:"keyring_dir"`
-				Capabilities []string `yaml:"capabilities"`
-			}{
-				KeyringDir:   filepath.Join(homeDir, "keyring"),
-				Capabilities: []string{"orbital_dynamics", "photometric_analysis"},
-			},
+			KeyringDir     string   `yaml:"keyring_dir"`
+			KeyringBackend string   `yaml:"keyring_backend"`  // ← NEU
+			Capabilities   []string `yaml:"capabilities"`
+		}{
+			KeyringDir:     filepath.Join(homeDir, "keyring"),
+			KeyringBackend: "test",  // ← NEU HINZUFÜGEN
+			Capabilities:   []string{"orbital_dynamics", "photometric_analysis"},
+		},
 			GPU: struct {
 				Enabled     bool `yaml:"enabled"`
 				DeviceID    int  `yaml:"device_id"`
@@ -430,30 +432,176 @@ func init() {
 	// Add standard cosmos flags
 	flags.AddTxFlagsToCmd(registerCmd)
 }
-
 func addKeysCommands() {
-	// Keys command group
+	// Create keys command with proper client context
 	keysCmd := &cobra.Command{
 		Use:   "keys",
-		Short: "Manage your application's keys",
-		Long: `Keys allows you to manage your local keystore for tendermint.
-These keys may be in any format supported by the Tendermint crypto library
-and can be used by light-clients, full nodes, or any other application
-that needs to sign with a private key.`,
+		Short: "Manage keyring",
+		Long:  "Commands for managing the keyring and keys",
+	}
+
+	// Add key command
+	addKeyCmd := &cobra.Command{
+		Use:   "add [name]",
+		Short: "Add a new key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Initialize client context for keys
+			clientCtx, err := initKeysClientContext()
+			if err != nil {
+				return fmt.Errorf("failed to initialize client context: %w", err)
+			}
+
+			keyName := args[0]
+			
+			// Check if --recover flag is set
+			recover, _ := cmd.Flags().GetBool("recover")
+			
+			if recover {
+				fmt.Print("Enter your mnemonic: ")
+				var mnemonic string
+				fmt.Scanln(&mnemonic)
+				
+				// Recover key from mnemonic
+				keyInfo, err := clientCtx.Keyring.NewAccount(keyName, mnemonic, "", sdk.FullFundraiserPath, hd.Secp256k1)
+				if err != nil {
+					return fmt.Errorf("failed to recover key: %w", err)
+				}
+				
+				addr, err := keyInfo.GetAddress()
+				if err != nil {
+					return fmt.Errorf("failed to get address: %w", err)
+				}
+				
+				fmt.Printf("Key '%s' recovered successfully\n", keyName)
+				fmt.Printf("Address: %s\n", addr.String())
+			} else {
+				// Generate new key
+				keyInfo, mnemonic, err := clientCtx.Keyring.NewMnemonic(keyName, keyring.English, sdk.FullFundraiserPath, "", hd.Secp256k1)
+				if err != nil {
+					return fmt.Errorf("failed to create key: %w", err)
+				}
+				
+				addr, err := keyInfo.GetAddress()
+				if err != nil {
+					return fmt.Errorf("failed to get address: %w", err)
+				}
+				
+				fmt.Printf("Key '%s' created successfully\n", keyName)
+				fmt.Printf("Address: %s\n", addr.String())
+				fmt.Printf("Mnemonic: %s\n", mnemonic)
+				fmt.Println("\n**Important**: Save the mnemonic phrase securely!")
+			}
+			
+			return nil
+		},
 	}
 	
-	// Add standard cosmos keys commands
-	keysCmd.AddCommand(
-		keys.AddKeyCommand(),
-		keys.ExportKeyCommand(),
-		keys.ImportKeyCommand(), 
-		keys.ListKeysCmd(),
-		keys.ShowKeysCmd(),
-		keys.DeleteKeyCommand(),
-		keys.RenameKeyCommand(),
-		keys.ParseKeyStringCommand(),
-		keys.MigrateCommand(),
-	)
+	// Add flags to add command
+	addKeyCmd.Flags().Bool("recover", false, "Recover key from mnemonic")
+	
+	// List keys command
+	listKeysCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all keys",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Initialize client context for keys
+			clientCtx, err := initKeysClientContext()
+			if err != nil {
+				return fmt.Errorf("failed to initialize client context: %w", err)
+			}
+
+			keys, err := clientCtx.Keyring.List()
+			if err != nil {
+				return fmt.Errorf("failed to list keys: %w", err)
+			}
+			
+			if len(keys) == 0 {
+				fmt.Println("No keys found")
+				return nil
+			}
+			
+			fmt.Println("Keys:")
+			for _, key := range keys {
+				addr, err := key.GetAddress()
+				if err != nil {
+					fmt.Printf("- %s: (error getting address: %v)\n", key.Name, err)
+					continue
+				}
+				fmt.Printf("- %s: %s\n", key.Name, addr.String())
+			}
+			
+			return nil
+		},
+	}
+	
+	// Show key command
+	showKeyCmd := &cobra.Command{
+		Use:   "show [name]",
+		Short: "Show key information",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := initKeysClientContext()
+			if err != nil {
+				return fmt.Errorf("failed to initialize client context: %w", err)
+			}
+
+			keyName := args[0]
+			keyInfo, err := clientCtx.Keyring.Key(keyName)
+			if err != nil {
+				return fmt.Errorf("key '%s' not found: %w", keyName, err)
+			}
+			
+			addr, err := keyInfo.GetAddress()
+			if err != nil {
+				return fmt.Errorf("failed to get address: %w", err)
+			}
+			
+			fmt.Printf("Name: %s\n", keyInfo.Name)
+			fmt.Printf("Address: %s\n", addr.String())
+			fmt.Printf("Type: %s\n", keyInfo.GetType())
+			
+			return nil
+		},
+	}
+	
+	// Delete key command
+	deleteKeyCmd := &cobra.Command{
+		Use:   "delete [name]",
+		Short: "Delete a key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := initKeysClientContext()
+			if err != nil {
+				return fmt.Errorf("failed to initialize client context: %w", err)
+			}
+
+			keyName := args[0]
+			
+			fmt.Printf("Are you sure you want to delete key '%s'? (y/N): ", keyName)
+			var response string
+			fmt.Scanln(&response)
+			
+			if response != "y" && response != "Y" {
+				fmt.Println("Cancelled")
+				return nil
+			}
+			
+			err = clientCtx.Keyring.Delete(keyName)
+			if err != nil {
+				return fmt.Errorf("failed to delete key: %w", err)
+			}
+			
+			fmt.Printf("Key '%s' deleted successfully\n", keyName)
+			return nil
+		},
+	}
+	
+	// Add subcommands
+	keysCmd.AddCommand(addKeyCmd)
+	keysCmd.AddCommand(listKeysCmd)
+	keysCmd.AddCommand(showKeyCmd)
+	keysCmd.AddCommand(deleteKeyCmd)
 	
 	// Add to root command
 	rootCmd.AddCommand(keysCmd)
@@ -508,6 +656,83 @@ func initializeClient() error {
 	}
 	
 	return nil
+}
+
+// Helper function to initialize client context for keys operations
+func initKeysClientContext() (client.Context, error) {
+	// Load config first
+	cfg := loadConfig()
+	
+	// Create basic client context for keyring operations
+	interfaceRegistry := getInterfaceRegistry()
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	
+	clientCtx := client.Context{}.
+		WithKeyringDir(cfg.Client.KeyringDir).
+		WithCodec(marshaler).
+		WithInterfaceRegistry(interfaceRegistry)
+	
+	// Initialize keyring with proper backend
+	keyringBackend := keyring.BackendTest // Use test backend as default
+	if cfg.Client.KeyringBackend != "" {
+		keyringBackend = cfg.Client.KeyringBackend
+	}
+	
+	kr, err := keyring.New(
+		sdk.KeyringServiceName(),
+		keyringBackend,
+		cfg.Client.KeyringDir,
+		nil, // no input
+		marshaler,
+	)
+	if err != nil {
+		return client.Context{}, fmt.Errorf("failed to create keyring: %w", err)
+	}
+	
+	clientCtx = clientCtx.WithKeyring(kr)
+	
+	return clientCtx, nil
+}
+
+// Helper function to load configuration
+func loadConfig() *Config {
+	config := &Config{}
+	
+	// Set defaults if not in config
+	config.Chain.ID = viper.GetString("chain.id")
+	if config.Chain.ID == "" {
+		config.Chain.ID = defaultChainID
+	}
+	
+	config.Chain.RPCEndpoint = viper.GetString("chain.rpc_endpoint")
+	if config.Chain.RPCEndpoint == "" {
+		config.Chain.RPCEndpoint = defaultRPCEndpoint
+	}
+	
+	config.Chain.Bech32Prefix = viper.GetString("chain.bech32_prefix")
+	if config.Chain.Bech32Prefix == "" {
+		config.Chain.Bech32Prefix = defaultBech32Prefix
+	}
+	
+	config.Client.KeyringDir = viper.GetString("client.keyring_dir")
+	if config.Client.KeyringDir == "" {
+		config.Client.KeyringDir = filepath.Join(homeDir, "keyring")
+	}
+	
+	config.Client.KeyringBackend = viper.GetString("client.keyring_backend")
+	if config.Client.KeyringBackend == "" {
+		config.Client.KeyringBackend = "test" // Safe default
+	}
+	
+	return config
+}
+
+// Helper functions for codec
+func getInterfaceRegistry() types.InterfaceRegistry {
+	interfaceRegistry := types.NewInterfaceRegistry()
+	std.RegisterLegacyAminoCodec(legacy.Cdc)
+	std.RegisterInterfaces(interfaceRegistry)
+	return interfaceRegistry
 }
 
 func main() {
