@@ -194,7 +194,12 @@ a unique client ID and registers the client's capabilities.`,
 		// Get key info to verify it exists
 		keyInfo, err := clientCtx.Keyring.Key(from)
 		if err != nil {
-			return fmt.Errorf("failed to get key info for '%s': %w\nTry: ./bin/medasdigital-client keys add %s --keyring-backend %s", from, from, keyringBackend)
+
+			if err != nil {
+			fmt.Printf("Key '%s' not found. Create it first with:\n", from)
+			fmt.Printf("  ./bin/medasdigital-client keys add %s --keyring-backend %s\n", from, keyringBackend)
+			return fmt.Errorf("failed to get key info for '%s': %v", from, err)
+			}
 		}
 		
 		addr, err := keyInfo.GetAddress()
