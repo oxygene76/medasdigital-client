@@ -147,16 +147,18 @@ operation.`,
 		}
 		
 		// Create default configuration
-		config := &Config{
-			Chain: struct {
-				ID           string `yaml:"chain_id"`
-				RPCEndpoint  string `yaml:"rpc_endpoint"`
-				Bech32Prefix string `yaml:"bech32_prefix"`
-			}{
-				ID:           defaultChainID,
-				RPCEndpoint:  defaultRPCEndpoint,
-				Bech32Prefix: defaultBech32Prefix,
-			},
+config := &Config{
+    Chain: struct {
+        ID           string `yaml:"chain_id"`
+        RPCEndpoint  string `yaml:"rpc_endpoint"`
+        Bech32Prefix string `yaml:"bech32_prefix"`
+        BaseDenom    string `yaml:"base_denom"`     // ← NEU HINZUFÜGEN
+    }{
+        ID:           defaultChainID,
+        RPCEndpoint:  defaultRPCEndpoint,
+        Bech32Prefix: defaultBech32Prefix,
+        BaseDenom:    "medas",                      // ← NEU HINZUFÜGEN
+    },
 			Client: struct {
 			KeyringDir     string   `yaml:"keyring_dir"`
 			KeyringBackend string   `yaml:"keyring_backend"`  // ← NEU
