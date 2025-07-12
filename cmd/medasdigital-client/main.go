@@ -1409,8 +1409,24 @@ txFactory := tx.Factory{}.
     WithKeybase(clientCtx.Keyring).
     WithTxConfig(clientCtx.TxConfig).
     WithAccountRetriever(authtypes.AccountRetriever{})
+	// Get account info for proper sequence
+accountRetriever := authtypes.AccountRetriever{}
+account, err := accountRetriever.GetAccount(clientCtx, fromAddr)
+if err != nil {
+    return nil, fmt.Errorf("failed to get account info: %w", err)
+}
 
-err = tx.Sign(context.Background(), txFactory, fromName, txBuilder, true)
+// Set account number and sequence
+txBuilder.SetFeeGranter(nil)
+txBuilder.SetFeePayer(fromAddr)
+
+// Update tx factory with account info
+txFactory = txFactory.
+    WithAccountNumber(account.GetAccountNumber()).
+    WithSequence(account.GetSequence())
+
+fmt.Printf("🔍 Account Number: %d, Sequence: %d\n", account.GetAccountNumber(), 
+	err = tx.Sign(context.Background(), txFactory, fromName, txBuilder, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
