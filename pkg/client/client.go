@@ -10,23 +10,35 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	comethttp "github.com/cometbft/cometbft/rpc/client/http"
 
-	"github.com/oxygene76/medasdigital-client/internal/types"
+	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 	"github.com/oxygene76/medasdigital-client/pkg/analysis"
 	"github.com/oxygene76/medasdigital-client/pkg/blockchain"
 	"github.com/oxygene76/medasdigital-client/pkg/gpu"
 	"github.com/oxygene76/medasdigital-client/pkg/utils"
 )
 
+// Config represents client configuration
+type Config struct {
+	Chain struct {
+		ID          string `json:"chain_id"`
+		RPCEndpoint string `json:"rpc_endpoint"`
+	} `json:"chain"`
+	Client struct {
+		Capabilities []string `json:"capabilities"`
+		KeyringDir   string   `json:"keyring_dir"`
+	} `json:"client"`
+	GPU utils.GPUConfig `json:"gpu"`
+}
+
 // MedasDigitalClient represents the main client for astronomical analysis
 type MedasDigitalClient struct {
-	config       *utils.Config
+	config       *Config
 	clientCtx    client.Context
 	clientID     string
 	capabilities []string
@@ -38,10 +50,7 @@ type MedasDigitalClient struct {
 
 // NewMedasDigitalClient creates a new MedasDigital client instance
 func NewMedasDigitalClient() (*MedasDigitalClient, error) {
-	config, err := utils.LoadConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
+	config := LoadDefaultConfig()
 
 	client := &MedasDigitalClient{
 		config:       config,
@@ -54,7 +63,8 @@ func NewMedasDigitalClient() (*MedasDigitalClient, error) {
 	}
 
 	if config.GPU.Enabled {
-		client.gpuManager, err = gpu.NewManager(config.GPU)
+		var err error
+		client.gpuManager, err = gpu.NewManager(&config.GPU)
 		if err != nil {
 			log.Printf("Warning: Failed to initialize GPU manager: %v", err)
 		}
@@ -66,43 +76,65 @@ func NewMedasDigitalClient() (*MedasDigitalClient, error) {
 	return client, nil
 }
 
+// LoadDefaultConfig loads default configuration
+func LoadDefaultConfig() *Config {
+	return &Config{
+		Chain: struct {
+			ID          string `json:"chain_id"`
+			RPCEndpoint string `json:"rpc_endpoint"`
+		}{
+			ID:          "medasdigital-2",
+			RPCEndpoint: "https://rpc.medas-digital.io:26657",
+		},
+		Client: struct {
+			Capabilities []string `json:"capabilities"`
+			KeyringDir   string   `json:"keyring_dir"`
+		}{
+			Capabilities: []string{"orbital_dynamics", "photometric_analysis", "clustering_analysis", "ai_training"},
+			KeyringDir:   "",
+		},
+		GPU: utils.GPUConfig{
+			Enabled: false,
+		},
+	}
+}
+
 func (c *MedasDigitalClient) initializeBlockchainClient() error {
 	// Codec setup
 	interfaceRegistry := types.NewInterfaceRegistry()
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
-	// Address codecs - required for v0.50
-	addressCodec := address.NewBech32Codec("medas")
-	validatorAddressCodec := address.NewBech32Codec("medasvaloper")
-	consensusAddressCodec := address.NewBech32Codec("medasvalcons")
+	// Address codec - simplified for v0.50
+	addressCodec := blockchain.NewBech32AddressCodec("medas")
 
-	// Keyring setup with address codec (v0.50 requirement)
-	kr, err := keyring.New(sdk.KeyringServiceName(), keyring.BackendOS, 
-		c.config.Client.KeyringDir, nil, addressCodec)
+	// Keyring setup - v0.50 compatible
+	kr, err := keyring.New(
+		sdk.KeyringServiceName(),
+		keyring.BackendOS,
+		c.config.Client.KeyringDir,
+		nil,
+		marshaler, // v0.50 requires codec parameter
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create keyring: %w", err)
 	}
 
-	// RPC Client setup - Updated to use CometBFT
+	// RPC Client setup
 	rpcClient, err := comethttp.New(c.config.Chain.RPCEndpoint, "/websocket")
 	if err != nil {
 		return fmt.Errorf("failed to create RPC client: %w", err)
 	}
 
-	// Client Context setup with address codecs (v0.50 requirement)
+	// Client Context setup - simplified for v0.50
 	c.clientCtx = client.Context{}.
 		WithCodec(marshaler).
 		WithInterfaceRegistry(interfaceRegistry).
 		WithTxConfig(authtx.NewTxConfig(marshaler, authtx.DefaultSignModes)).
 		WithLegacyAmino(codec.NewLegacyAmino()).
-		WithAccountRetriever(authtx.NewAccountRetriever(marshaler)).
 		WithBroadcastMode("block").
 		WithChainID(c.config.Chain.ID).
 		WithKeyring(kr).
-		WithClient(rpcClient).
-		WithAddressCodec(addressCodec).
-		WithValidatorAddressCodec(validatorAddressCodec).
-		WithConsensusAddressCodec(consensusAddressCodec)
+		WithClient(rpcClient)
 
 	return nil
 }
@@ -142,7 +174,7 @@ func (c *MedasDigitalClient) Register(capabilities []string, metadata, from stri
 	return nil
 }
 
-func (c *MedasDigitalClient) generateMetadata(userMetadata string) string {
+func (c *MedasDigitalClient) generateMetadata(userMetadata string) map[string]interface{} {
 	metadata := map[string]interface{}{
 		"version":       "1.0.0",
 		"capabilities":  c.capabilities,
@@ -158,8 +190,7 @@ func (c *MedasDigitalClient) generateMetadata(userMetadata string) string {
 		metadata["gpu_info"] = gpuInfo
 	}
 
-	data, _ := json.Marshal(metadata)
-	return string(data)
+	return metadata
 }
 
 // AnalyzeOrbitalDynamics performs orbital dynamics analysis
@@ -314,7 +345,7 @@ func (c *MedasDigitalClient) Status() error {
 	if err != nil {
 		fmt.Printf("Blockchain Status: ERROR - %v\n", err)
 	} else {
-		fmt.Printf("Blockchain Status: Connected (Block: %d)\n", status.SyncInfo.LatestBlockHeight)
+		fmt.Printf("Blockchain Status: Connected (Block: %d)\n", status.LatestHeight)
 	}
 
 	// GPU status
@@ -350,17 +381,21 @@ func (c *MedasDigitalClient) Results(limit int) error {
 	return nil
 }
 
-// Query queries blockchain data
+// Query queries blockchain data - simplified implementation
 func (c *MedasDigitalClient) Query(queryType, queryID string) error {
 	fmt.Printf("=== Querying %s: %s ===\n", queryType, queryID)
 
-	result, err := c.blockchain.Query(queryType, queryID)
-	if err != nil {
-		return fmt.Errorf("query failed: %w", err)
+	switch queryType {
+	case "client":
+		result, err := c.blockchain.GetClient(queryID)
+		if err != nil {
+			return fmt.Errorf("query failed: %w", err)
+		}
+		data, _ := json.MarshalIndent(result, "", "  ")
+		fmt.Printf("%s\n", string(data))
+	default:
+		return fmt.Errorf("unsupported query type: %s", queryType)
 	}
-
-	data, _ := json.MarshalIndent(result, "", "  ")
-	fmt.Printf("%s\n", string(data))
 
 	return nil
 }
@@ -393,23 +428,29 @@ func (c *MedasDigitalClient) hasCapability(capability string) bool {
 	return false
 }
 
-func (c *MedasDigitalClient) storeAnalysisResult(result *types.AnalysisResult) error {
+func (c *MedasDigitalClient) storeAnalysisResult(result *itypes.AnalysisResult) error {
 	if !c.isRegistered {
 		return fmt.Errorf("client not registered")
+	}
+
+	// Convert AnalysisResult to JSON for storage
+	data, err := json.Marshal(result.Data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal result data: %w", err)
 	}
 
 	// Use blockchain client to store results
 	return c.blockchain.StoreAnalysisResult(
 		c.clientCtx.GetFromAddress().String(),
 		c.clientID,
-		result.Type,
-		result.Results,
+		result.AnalysisType,
+		data,
 		result.BlockHeight,
 		result.TxHash,
 	)
 }
 
-func (c *MedasDigitalClient) saveResults(result *types.AnalysisResult, outputFile string) error {
+func (c *MedasDigitalClient) saveResults(result *itypes.AnalysisResult, outputFile string) error {
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return err
