@@ -1123,6 +1123,8 @@ func initKeysClientContextWithBackend(keyringBackend string) (client.Context, er
 
 // Vollständige createFullBlockchainClient Funktion für main.go:
 
+// Ersetzen Sie die createFullBlockchainClient Funktion in main.go:
+
 func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockchain.Client, error) {
 	// Create RPC client
 	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
@@ -1144,7 +1146,7 @@ func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockch
 	// Create AccountRetriever
 	accountRetriever := authtypes.AccountRetriever{}
 	
-	// Create complete client context with all required components
+	// ✅ WICHTIG: Verwenden Sie das GLEICHE Keyring wie bei check-account!
 	fullClientCtx := clientCtx.
 		WithClient(rpcClient).
 		WithChainID(cfg.Chain.ID).
@@ -1153,13 +1155,14 @@ func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockch
 		WithTxConfig(txConfig).
 		WithAccountRetriever(accountRetriever).
 		WithNodeURI(cfg.Chain.RPCEndpoint).
+		WithKeyring(clientCtx.Keyring).              // ✅ GLEICHER KEYRING!
+		WithFromName(clientCtx.GetFromName()).       // ✅ FROM NAME
+		WithFromAddress(clientCtx.GetFromAddress()). // ✅ FROM ADDRESS
 		WithOffline(false).
 		WithGenerateOnly(false).
 		WithSimulation(false).
 		WithUseLedger(false).
-		WithBroadcastMode(flags.BroadcastSync).
-		WithFromName(clientCtx.GetFromName()).
-		WithFromAddress(clientCtx.GetFromAddress())
+		WithBroadcastMode(flags.BroadcastSync)
 	
 	// Create blockchain client
 	blockchainClient := blockchain.NewClient(fullClientCtx)
