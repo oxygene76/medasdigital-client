@@ -189,8 +189,9 @@ func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxRespons
 }
 
 
-// Fügen Sie Debug-Information zur estimateGas Funktion hinzu:
+// Ersetzen Sie die estimateGas Funktion in pkg/blockchain/client.go:
 
+// estimateGas estimates gas for a transaction - clean version without fallback
 func (c *Client) estimateGas(msgs []sdk.Msg) (uint64, error) {
 	fmt.Println("🔧 Starting gas estimation...")
 	
@@ -209,6 +210,15 @@ func (c *Client) estimateGas(msgs []sdk.Msg) (uint64, error) {
 		}
 	}
 	
+	// Create transaction builder for simulation
+	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
+	if err := txBuilder.SetMsgs(msgs...); err != nil {
+		return 0, fmt.Errorf("failed to set messages: %w", err)
+	}
+
+	// Set temporary gas limit for simulation
+	txBuilder.SetGasLimit(1000000)
+	
 	// ✅ SICHER: Verwenden Sie explizit den gleichen Keyring
 	simClientCtx := c.clientCtx.
 		WithKeyring(c.clientCtx.Keyring). // Explizit gleicher Keyring
@@ -226,33 +236,25 @@ func (c *Client) estimateGas(msgs []sdk.Msg) (uint64, error) {
 		WithGas(1000000).
 		WithGasAdjustment(1.0)
 	
-	fmt.Println("🔧 Using explicit keyring for simulation...")
+	fmt.Println("🔧 Calculating gas with proper keyring...")
 	
-	// Rest der estimateGas Funktion bleibt gleich...
-	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
-	if err := txBuilder.SetMsgs(msgs...); err != nil {
-		return 0, fmt.Errorf("failed to set messages: %w", err)
-	}
-
-	txBuilder.SetGasLimit(1000000)
-	
-	fmt.Println("🔧 Calculating gas...")
+	// Calculate gas - if this fails, return the error
 	simRes, adjustedGas, err := tx.CalculateGas(simClientCtx, simFactory, msgs...)
 	if err != nil {
-		fmt.Printf("⚠️  Gas calculation failed: %v\n", err)
-		fmt.Println("📏 Falling back to conservative estimate...")
-		return c.estimateGasFallback(msgs), nil
+		return 0, fmt.Errorf("gas calculation failed: %w", err)
 	}
 
 	fmt.Printf("✅ Gas estimation successful: %d\n", adjustedGas)
 	_ = simRes
 	
-	gasWithBuffer := uint64(float64(adjustedGas) * 1.1)
+	// Add small buffer for safety
+	gasWithBuffer := uint64(float64(adjustedGas) * 1.1) // 10% buffer
 	fmt.Printf("📊 Gas with buffer: %d\n", gasWithBuffer)
 	
 	return gasWithBuffer, nil
 }
 
+// ENTFERNEN Sie die estimateGasFallback Funktion komplett
 // GetClient retrieves client information
 func (c *Client) GetClient(clientID string) (*itypes.RegisteredClient, error) {
 	// Query client information from blockchain
