@@ -287,12 +287,13 @@ metadataMap["timestamp"] = time.Now().Unix()
 metadataMap["client_version"] = version
 metadataMap["registration_type"] = "client_registration"
 
-fmt.Println("🚀 Sending registration transaction to blockchain...")
-fmt.Printf("📍 From: %s\n", addr.String())
-fmt.Printf("🔧 Capabilities: %v\n", capabilities)
+fmt.Println("📝 Registering client using standard blockchain transaction...")
 
-// ✅ ECHTE BLOCKCHAIN-REGISTRIERUNG
-clientID, err := blockchainClient.RegisterClient(addr.String(), capabilities, metadataMap)
+// Set FromName in clientCtx for signing
+clientCtx = clientCtx.WithFromName(from).WithFromAddress(addr)
+
+// Use simple registration method
+result, err := registerClientSimple(clientCtx, addr.String(), capabilities, metadata, gas)
 if err != nil {
     fmt.Printf("❌ Blockchain registration failed: %v\n", err)
     fmt.Println("💡 This might be due to:")
@@ -306,11 +307,14 @@ if err != nil {
 // ✅ SUCCESS!
 fmt.Println("\n🎉 CLIENT SUCCESSFULLY REGISTERED ON BLOCKCHAIN!")
 fmt.Println("=" + strings.Repeat("=", 50))
-fmt.Printf("🆔 Client ID: %s\n", clientID)
-fmt.Printf("📍 Address: %s\n", addr.String())
+fmt.Printf("🆔 Client ID: %s\n", result.ClientID)
+fmt.Printf("📍 Address: %s\n", result.RegistrationData.ClientAddress)
 fmt.Printf("⛓️  Chain: %s\n", cfg.Chain.ID)
-fmt.Printf("🔧 Capabilities: %v\n", capabilities)
-fmt.Printf("🕒 Registered: %s\n", time.Now().Format("2006-01-02 15:04:05"))
+fmt.Printf("🔧 Capabilities: %v\n", result.RegistrationData.Capabilities)
+fmt.Printf("📊 Transaction Hash: %s\n", result.TransactionHash)
+fmt.Printf("🏔️  Block Height: %d\n", result.BlockHeight)
+fmt.Printf("🕒 Registered: %s\n", result.RegisteredAt.Format("2006-01-02 15:04:05"))
+fmt.Printf("💾 Registration saved to: ~/.medasdigital-client/registrations/\n")
 
 if metadata != "" {
     fmt.Printf("📋 Metadata: %s\n", metadata)
@@ -318,6 +322,8 @@ if metadata != "" {
 
 fmt.Println("=" + strings.Repeat("=", 50))
 fmt.Println("✅ Your client is now active on the MedasDigital network!")
+fmt.Println("\n💡 To verify registration on blockchain:")
+fmt.Printf("   ./bin/medasdigital-client query tx %s\n", result.TransactionHash)
 
 return nil
 
