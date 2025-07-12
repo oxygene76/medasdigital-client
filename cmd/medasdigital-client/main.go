@@ -1248,7 +1248,62 @@ func simulateRegistration(keyName, address string, capabilities []string, metada
 
 // Fügen Sie einen neuen Command zur main.go hinzu:
 
+// Generate client ID from transaction hash
+func generateClientID(txHash string) string {
+	// Create deterministic client ID from transaction hash
+	hash := sha256.Sum256([]byte(txHash))
+	shortHash := hex.EncodeToString(hash[:4]) // First 8 characters
+	return fmt.Sprintf("client-%s", shortHash)
+}
 
+// Save registration result locally
+func saveRegistrationResult(result *RegistrationResult) error {
+	// Create registrations directory
+	homeDir, _ := os.UserHomeDir()
+	regDir := filepath.Join(homeDir, ".medasdigital-client", "registrations")
+	if err := os.MkdirAll(regDir, 0755); err != nil {
+		return fmt.Errorf("failed to create registrations directory: %w", err)
+	}
+
+	// Save individual registration file
+	filename := fmt.Sprintf("registration-%s.json", result.ClientID)
+	filepath := filepath.Join(regDir, filename)
+
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal registration result: %w", err)
+	}
+
+	if err := os.WriteFile(filepath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write registration file: %w", err)
+	}
+
+	// Update index file
+	return updateRegistrationIndex(result)
+}
+
+// Update registration index
+func updateRegistrationIndex(result *RegistrationResult) error {
+	homeDir, _ := os.UserHomeDir()
+	indexPath := filepath.Join(homeDir, ".medasdigital-client", "registrations", "index.json")
+
+	// Load existing index
+	var index []RegistrationResult
+	if data, err := os.ReadFile(indexPath); err == nil {
+		json.Unmarshal(data, &index)
+	}
+
+	// Add new registration
+	index = append(index, *result)
+
+	// Save updated index
+	data, err := json.MarshalIndent(index, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(indexPath, data, 0644)
+}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
