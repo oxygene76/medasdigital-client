@@ -1105,6 +1105,11 @@ func loadConfig() *Config {
 		config.Chain.Bech32Prefix = defaultBech32Prefix
 	}
 	
+	config.Chain.BaseDenom = viper.GetString("chain.base_denom")
+	if config.Chain.BaseDenom == "" {
+		config.Chain.BaseDenom = defaultBaseDenom
+	}
+	
 	config.Client.KeyringDir = viper.GetString("client.keyring_dir")
 	if config.Client.KeyringDir == "" {
 		config.Client.KeyringDir = filepath.Join(homeDir, "keyring")
@@ -1447,44 +1452,7 @@ err = tx.Sign(context.Background(), txFactory, fromName, txBuilder, true)
 	return regResult, nil
 }
 
-// Helper function to load configuration
-func loadConfig() *Config {
-	config := &Config{}
-	
-	// Set defaults if not in config
-	config.Chain.ID = viper.GetString("chain.id")
-	if config.Chain.ID == "" {
-		config.Chain.ID = defaultChainID
-	}
-	
-	config.Chain.RPCEndpoint = viper.GetString("chain.rpc_endpoint")
-	if config.Chain.RPCEndpoint == "" {
-		config.Chain.RPCEndpoint = defaultRPCEndpoint
-	}
-	
-	config.Chain.Bech32Prefix = viper.GetString("chain.bech32_prefix")
-	if config.Chain.Bech32Prefix == "" {
-		config.Chain.Bech32Prefix = defaultBech32Prefix
-	}
-	
-	// ✅ WICHTIG: BaseDenom laden
-	config.Chain.BaseDenom = viper.GetString("chain.base_denom")
-	if config.Chain.BaseDenom == "" {
-		config.Chain.BaseDenom = defaultBaseDenom
-	}
-	
-	config.Client.KeyringDir = viper.GetString("client.keyring_dir")
-	if config.Client.KeyringDir == "" {
-		config.Client.KeyringDir = filepath.Join(homeDir, "keyring")
-	}
-	
-	config.Client.KeyringBackend = viper.GetString("client.keyring_backend")
-	if config.Client.KeyringBackend == "" {
-		config.Client.KeyringBackend = "test" // Safe default
-	}
-	
-	return config
-}
+
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
