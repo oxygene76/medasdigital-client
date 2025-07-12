@@ -301,6 +301,13 @@ type GravEffect struct {
 	Parameters      map[string]float64     `json:"parameters"`       // additional parameters
 	TimeRange       TimeRange              `json:"time_range"`       // time range of effect
 	Resonance       *ResonanceInfo         `json:"resonance,omitempty"` // resonance details if applicable
+        // Felder die orbital.go braucht:
+	ObjectID          string  `json:"object_id"`
+	DeltaSemimajor    float64 `json:"delta_semimajor"`
+	DeltaEccentricity float64 `json:"delta_eccentricity"`
+	DeltaInclination  float64 `json:"delta_inclination"`
+	Significance      float64 `json:"significance"`
+
 }
 
 // TimeRange represents a time range
