@@ -12,7 +12,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
-	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
@@ -24,9 +23,6 @@ import (
 
 	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
-
-
-var sdkCodec addresscodec.Codec  // ✅ Konsistente Verwendung
 
 // ClientBuilder helps create blockchain clients with proper configuration
 type ClientBuilder struct {
@@ -88,23 +84,13 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 	interfaceRegistry := types.NewInterfaceRegistry()
 	marshaler := codec.NewProtoCodec(interfaceRegistry)
 
-	// Create keyring (v0.50 compatible)
-	realAddressCodec := NewBech32AddressCodec(cb.bech32Prefix)
-	
-	// Get the underlying SDK codec for keyring creation
-	var sdkCodec address.Codec
-	if bech32Codec, ok := realAddressCodec.(*Bech32AddressCodec); ok {
-		sdkCodec = bech32Codec.GetSDKCodec()
-	} else {
-		return nil, fmt.Errorf("failed to get SDK codec")
-	}
-	
-	kr, err := keyring.New(sdk.KeyringServiceName(), cb.keyringBackend, cb.keyringDir, nil, sdkCodec)
+	// Create keyring (v0.50 compatible - simplified)
+	kr, err := keyring.New(sdk.KeyringServiceName(), cb.keyringBackend, cb.keyringDir, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create keyring: %w", err)
 	}
 
-	// Create client context - use basic setup for v0.50
+	// Create client context - simplified for v0.50
 	clientCtx := client.Context{}.
 		WithCodec(marshaler).
 		WithInterfaceRegistry(interfaceRegistry).
@@ -162,20 +148,31 @@ func (km *KeyManager) GetKey(name string) (*keyring.Record, error) {
 	return record, nil
 }
 
-// GetKeyByAddress retrieves a key by address
+// GetKeyByAddress retrieves a key by address - simplified version
 func (km *KeyManager) GetKeyByAddress(address string) (*keyring.Record, error) {
-	addr, err := km.addressCodec.StringToBytes(address)
+	// Convert address string to sdk.AccAddress
+	accAddr, err := sdk.AccAddressFromBech32(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode address: %w", err)
 	}
 
-	// Convert []byte to sdk.AccAddress for v0.50
-	accAddr := sdk.AccAddress(addr)
-	record, err := km.keyring.KeyByAddress(accAddr)
+	// Iterate through all keys to find the matching address
+	records, err := km.keyring.List()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get key by address: %w", err)
+		return nil, fmt.Errorf("failed to list keys: %w", err)
 	}
-	return record, nil
+
+	for _, record := range records {
+		recordAddr, err := record.GetAddress()
+		if err != nil {
+			continue
+		}
+		if recordAddr.Equals(accAddr) {
+			return record, nil
+		}
+	}
+
+	return nil, fmt.Errorf("key not found for address: %s", address)
 }
 
 // ListKeys returns all keys in the keyring
@@ -569,25 +566,27 @@ func NewGasEstimator(client *Client) *GasEstimator {
 	}
 }
 
-// EstimateGas estimates gas for a transaction
+// EstimateGas estimates gas for a transaction - v0.50 compatible
 func (ge *GasEstimator) EstimateGas(msgs []sdk.Msg) (uint64, error) {
 	txBuilder := ge.client.clientCtx.TxConfig.NewTxBuilder()
 	if err := txBuilder.SetMsgs(msgs...); err != nil {
 		return 0, fmt.Errorf("failed to set messages: %w", err)
 	}
 
-	// Use a default gas limit for simulation
+	// Set a default gas limit for simulation
 	txBuilder.SetGasLimit(1000000)
 
-	// Simulate the transaction
-	simRes, _, err := ge.client.clientCtx.Simulate(txBuilder.GetTx())
+	// Use tx.CalculateGas for v0.50 API
+	simRes, adjustedGas, err := tx.CalculateGas(ge.client.clientCtx.GRPCClient, ge.client.txFactory, msgs...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to simulate transaction: %w", err)
 	}
 
+	// Use the adjusted gas returned by CalculateGas
+	_ = simRes // simRes is available if needed for additional info
+	
 	// Add a buffer to the estimated gas
-	estimatedGas := simRes.GasInfo.GasUsed
-	gasWithBuffer := uint64(float64(estimatedGas) * 1.3) // 30% buffer
+	gasWithBuffer := uint64(float64(adjustedGas) * 1.3) // 30% buffer
 
 	return gasWithBuffer, nil
 }
