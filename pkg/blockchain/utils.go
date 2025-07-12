@@ -88,8 +88,20 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create keyring: %w", err)
 	}
-}
 
+	// Create client context - simplified for v0.50
+	clientCtx := client.Context{}.
+		WithCodec(marshaler).
+		WithInterfaceRegistry(interfaceRegistry).
+		WithTxConfig(authtx.NewTxConfig(marshaler, authtx.DefaultSignModes)).
+		WithLegacyAmino(codec.NewLegacyAmino()).
+		WithBroadcastMode("block").
+		WithChainID(cb.chainID).
+		WithKeyring(kr).
+		WithClient(rpcClient)
+
+	return NewClient(clientCtx), nil
+}
 	// Create client context - simplified for v0.50
 	clientCtx := client.Context{}.
 		WithCodec(marshaler).
