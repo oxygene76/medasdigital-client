@@ -132,6 +132,16 @@ func (m *Manager) getPrimaryDevice() (*types.GPUDevice, error) {
 	return &m.devices[primaryID], nil
 }
 
+// IsEnabled checks if GPU is enabled
+func (m *Manager) IsEnabled() bool {
+	return m.config.Enabled
+}
+
+// GetConfiguredDevices returns configured device IDs
+func (m *Manager) GetConfiguredDevices() []int {
+	return m.config.GetDeviceIDs()
+}
+
 // SetDevice sets the active CUDA device
 func (m *Manager) SetDevice(deviceID int) error {
 	m.mutex.Lock()
