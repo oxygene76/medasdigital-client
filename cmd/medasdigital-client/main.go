@@ -908,11 +908,7 @@ func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockch
 	}
 	
 	// Create TxConfig using v0.50 API
-	txConfig := authtx.NewTxConfig(globalCodec, []signing.SignMode{
-		signing.SignMode_SIGN_MODE_DIRECT,
-		signing.SignMode_SIGN_MODE_TEXTUAL,
-		signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON,
-	})
+	txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
 	
 	// Create AccountRetriever
 	accountRetriever := authtypes.AccountRetriever{}
