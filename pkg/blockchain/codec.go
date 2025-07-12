@@ -8,6 +8,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/gogoproto/proto"
+	"github.com/cosmos/cosmos-sdk/client"        // für client.TxConfig
+	"github.com/cosmos/cosmos-sdk/client/tx"    
 )
 
 var (
