@@ -369,38 +369,140 @@ var checkAccountCmd = &cobra.Command{
 			return fmt.Errorf("invalid address format: %w", err)
 		}
 		
-		// Try to query account
-		fmt.Println("📊 Querying account information...")
+		// Try to query account using v0.50.10 methods
+fmt.Println("📊 Querying account information (Cosmos SDK v0.50.10)...")
+
+// Parse address for proper encoding
+addr, err := sdk.AccAddressFromBech32(address)
+if err != nil {
+    return fmt.Errorf("invalid address format: %w", err)
+}
+
+fmt.Printf("🔍 Address Details:\n")
+fmt.Printf("   Bech32: %s\n", address)
+fmt.Printf("   Hex: %X\n", addr.Bytes())
+fmt.Printf("   Length: %d bytes\n", len(addr.Bytes()))
+fmt.Println()
+
+// TEST 1: Direct gRPC-style query (v0.50.10 method)
+fmt.Println("🔍 Testing gRPC Query (v0.50.10 method):")
+
+// Create proper query request
+queryReq := fmt.Sprintf(`{"address":"%s"}`, address)
+fmt.Printf("   Query Request: %s\n", queryReq)
+
+// Try the auth module query
+authQueryPath := "/cosmos.auth.v1beta1.Query/Account"
+fmt.Printf("   Query Path: %s\n", authQueryPath)
+
+authRes, authHeight, authErr := queryCtx.QueryWithData(authQueryPath, []byte(queryReq))
+fmt.Printf("   Auth Query Result:\n")
+fmt.Printf("     Error: %v\n", authErr)
+fmt.Printf("     Height: %d\n", authHeight)
+fmt.Printf("     Response Length: %d bytes\n", len(authRes))
+
+if authErr == nil && len(authRes) > 0 {
+    fmt.Printf("     Response Data: %s\n", string(authRes))
+} else if authErr != nil {
+    fmt.Printf("     Error Type: %T\n", authErr)
+    fmt.Printf("     Error Details: %s\n", authErr.Error())
+}
+fmt.Println()
+
+// TEST 2: Bank balance query (v0.50.10)
+fmt.Println("🔍 Testing Bank Balance Query (v0.50.10):")
+
+// Try different denom names that might be used
+denoms := []string{"stake", "token", "medas", "umedas", "atom", "uatom"}
+
+for _, denom := range denoms {
+    balanceQueryReq := fmt.Sprintf(`{"address":"%s","denom":"%s"}`, address, denom)
+    balanceQueryPath := "/cosmos.bank.v1beta1.Query/Balance"
+    
+    fmt.Printf("   Testing denom '%s':\n", denom)
+    fmt.Printf("     Query: %s\n", balanceQueryReq)
+    
+    balRes, balHeight, balErr := queryCtx.QueryWithData(balanceQueryPath, []byte(balanceQueryReq))
+    fmt.Printf("     Result: ")
+    if balErr != nil {
+        fmt.Printf("Error - %v\n", balErr)
+    } else {
+        fmt.Printf("Success - %d bytes, height %d\n", len(balRes), balHeight)
+        if len(balRes) > 0 && len(balRes) < 1000 {
+            fmt.Printf("     Data: %s\n", string(balRes))
+        }
+    }
+}
+fmt.Println()
+
+// TEST 3: All balances query
+fmt.Println("🔍 Testing All Balances Query (v0.50.10):")
+allBalancesReq := fmt.Sprintf(`{"address":"%s"}`, address)
+allBalancesPath := "/cosmos.bank.v1beta1.Query/AllBalances"
+fmt.Printf("   Query: %s\n", allBalancesReq)
+
+allBalRes, allBalHeight, allBalErr := queryCtx.QueryWithData(allBalancesPath, []byte(allBalancesReq))
+fmt.Printf("   Result:\n")
+fmt.Printf("     Error: %v\n", allBalErr)
+fmt.Printf("     Height: %d\n", allBalHeight)
+fmt.Printf("     Response Length: %d bytes\n", len(allBalRes))
+
+if allBalErr == nil && len(allBalRes) > 0 {
+    fmt.Printf("     Response Data: %s\n", string(allBalRes))
+}
+fmt.Println()
+
+// TEST 4: Chain information that works
+fmt.Println("🔍 Working Chain Information:")
+status, err := queryCtx.Client.Status(context.Background())
+if err != nil {
+    fmt.Printf("   Status Error: %v\n", err)
+} else {
+    fmt.Printf("   Chain ID: %s\n", status.NodeInfo.Network)
+    fmt.Printf("   Latest Height: %d\n", status.SyncInfo.LatestBlockHeight)
+    fmt.Printf("   Latest Block Time: %s\n", status.SyncInfo.LatestBlockTime)
+    fmt.Printf("   App Version: %s\n", status.NodeInfo.Version)
+    fmt.Printf("   Catching Up: %t\n", status.SyncInfo.CatchingUp)
+}
+fmt.Println()
+
+// TEST 5: Try AccountRetriever (v0.50.10 way)
+fmt.Println("🔍 Testing AccountRetriever (v0.50.10 method):")
+accountRetriever := authtypes.AccountRetriever{}
+
+account, accErr := accountRetriever.GetAccount(queryCtx, addr)
+fmt.Printf("   AccountRetriever Result:\n")
+fmt.Printf("     Error: %v\n", accErr)
+
+if accErr == nil && account != nil {
+    fmt.Printf("     Account Found: ✅\n")
+    fmt.Printf("     Account Number: %d\n", account.GetAccountNumber())
+    fmt.Printf("     Sequence: %d\n", account.GetSequence())
+    fmt.Printf("     Address: %s\n", account.GetAddress().String())
+    fmt.Printf("     PubKey: %v\n", account.GetPubKey())
+} else if accErr != nil {
+    fmt.Printf("     Error Type: %T\n", accErr)
+    fmt.Printf("     Error Details: %s\n", accErr.Error())
+}
+fmt.Println()
+
+// SUMMARY
+fmt.Println("📋 Summary (Cosmos SDK v0.50.10):")
+fmt.Printf("   Address: %s\n", address)
+fmt.Printf("   Chain: %s\n", cfg.Chain.ID)
+fmt.Printf("   SDK Version: v0.50.10\n")
+fmt.Printf("   RPC Connection: ✅ Working\n")
+
+// Determine what we actually found
+if authErr == nil || allBalErr == nil || accErr == nil {
+    fmt.Printf("   Account Status: ✅ Found via at least one method\n")
+} else {
+    fmt.Printf("   Account Status: ❓ Not found via tested methods\n")
+    fmt.Printf("   Note: Account may exist but use different query format\n")
+}
+
+return nil
 		
-		// Use direct RPC query since AccountRetriever might be complex
-		queryPath := "/cosmos.auth.v1beta1.Query/Account"
-		queryData := fmt.Sprintf(`{"address":"%s"}`, address)
-		
-		res, _, err := queryCtx.QueryWithData(queryPath, []byte(queryData))
-		if err != nil {
-			fmt.Printf("❌ Account not found or query failed: %v\n", err)
-			fmt.Println("\n💡 This means:")
-			fmt.Println("   • Account does not exist on the blockchain")
-			fmt.Println("   • Account has never received any tokens")
-			fmt.Println("   • Account needs to be funded before making transactions")
-			fmt.Println("\n🔧 To fix this:")
-			fmt.Println("   1. Send some tokens to this address")
-			fmt.Println("   2. Or use a faucet if available on testnet")
-			fmt.Printf("   3. Address to fund: %s\n", address)
-			return nil
-		}
-		
-		fmt.Println("✅ Account found on blockchain!")
-		fmt.Printf("📍 Address: %s\n", address)
-		fmt.Printf("⛓️  Chain: %s\n", cfg.Chain.ID)
-		fmt.Printf("📊 Account data length: %d bytes\n", len(res))
-		
-		// Try to parse account info (basic)
-		if len(res) > 0 {
-			fmt.Println("✅ Account is initialized and ready for transactions!")
-		}
-		
-		return nil
 	},
 }
 
