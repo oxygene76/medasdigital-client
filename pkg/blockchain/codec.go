@@ -6,19 +6,14 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/gogoproto/proto"
-	"github.com/cosmos/cosmos-sdk/client"        // für client.TxConfig
-	"github.com/cosmos/cosmos-sdk/client/tx"    
-
-	"github.com/cosmos/cosmos-sdk/x/auth/tx"           // Statt client/tx
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"   // Alias für bessere Klarheit
-	"github.com/cosmos/cosmos-sdk/types/tx/signing" 
 )
 
 var (
 	// Global registry to avoid duplicate registrations
-	globalInterfaceRegistry types.InterfaceRegistry
+	globalInterfaceRegistry   types.InterfaceRegistry
 	globalRegistryInitialized bool
 )
 
@@ -28,7 +23,6 @@ type Codec struct {
 	interfaceRegistry types.InterfaceRegistry
 	addressCodec      AddressCodec
 	config            CodecConfig
-	txConfig          client.TxConfig  // ← NEU HINZUFÜGEN
 }
 
 // CodecConfig configuration for codec
@@ -48,17 +42,11 @@ func NewCodec() *Codec {
 	}
 	
 	marshaler := codec.NewProtoCodec(globalInterfaceRegistry)
-	txConfig := authtx.NewTxConfig(marshaler, []signing.SignMode{
-	signing.SignMode_SIGN_MODE_DIRECT,
-	signing.SignMode_SIGN_MODE_TEXTUAL,
-	signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON,
-	})
 	
 	return &Codec{
 		marshaler:         marshaler,
 		interfaceRegistry: globalInterfaceRegistry,
 		addressCodec:      NewBech32AddressCodec("medas"),
-		txConfig:          txConfig,  // ← NEU
 		config: CodecConfig{
 			Bech32Prefix:   "medas",
 			UseProtobuf:    true,
@@ -161,7 +149,7 @@ func (c *Codec) ValidateAddress(addr string) error {
 
 // RegisterInterfaces registers the interfaces for protobuf
 func RegisterInterfaces(registry types.InterfaceRegistry) {
-	// ✅ AKTIVIERT: Mit eindeutigen Proto-Message-Namen
+	// Register message implementations
 	registry.RegisterImplementations(
 		(*sdk.Msg)(nil),
 		&MsgRegisterClient{},
@@ -170,7 +158,7 @@ func RegisterInterfaces(registry types.InterfaceRegistry) {
 		&MsgDeactivateClient{},
 	)
 	
-	// Zusätzlich: Registrierung für Proto-Message Interface
+	// Additional proto.Message registration
 	registry.RegisterImplementations(
 		(*proto.Message)(nil),
 		&MsgRegisterClient{},
@@ -188,7 +176,7 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgDeactivateClient{}, "clientregistry/MsgDeactivateClient", nil)
 }
 
-// ValidateMessage validates a message - FIXED: Proper interface checking
+// ValidateMessage validates a message
 func (c *Codec) ValidateMessage(msg interface{}) error {
 	// First try the direct ValidateBasic method interface
 	if validator, ok := msg.(interface{ ValidateBasic() error }); ok {
@@ -218,7 +206,6 @@ func (c *Codec) GetTypeURL(msg proto.Message) string {
 	}
 	
 	// Fallback: try to get from interface registry
-	// This is a simplified approach for v0.50 compatibility
 	return "/" + fmt.Sprintf("%T", msg)
 }
 
@@ -252,16 +239,6 @@ func (c *Codec) MustUnmarshalBinary(data []byte, obj interface{}) {
 	if err := c.UnmarshalBinary(data, obj); err != nil {
 		panic(err)
 	}
-}
-
-// GetTxConfig returns the TxConfig for transaction building
-func (c *Codec) GetTxConfig() client.TxConfig {
-	return tx.NewTxConfig(c.marshaler, tx.DefaultSignModes)
-}
-
-// GetCodec returns the underlying codec
-func (c *Codec) GetCodec() codec.Codec {
-	return c.marshaler
 }
 
 // Global codec instance
