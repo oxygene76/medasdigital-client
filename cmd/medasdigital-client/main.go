@@ -48,6 +48,7 @@ const (
 	defaultChainID     = "medasdigital-2"
 	defaultRPCEndpoint = "https://rpc.medas-digital.io:26657"
 	defaultBech32Prefix = "medas"
+	defaultBaseDenom    = "medas"        // ← NEU HINZUFÜGEN
 )
 
 var (
@@ -157,7 +158,7 @@ config := &Config{
         ID:           defaultChainID,
         RPCEndpoint:  defaultRPCEndpoint,
         Bech32Prefix: defaultBech32Prefix,
-        BaseDenom:    "medas",                      // ← NEU HINZUFÜGEN
+        BaseDenom:    defaultBaseDenom,                       // ← NEU HINZUFÜGEN
     },
 			Client: struct {
 			KeyringDir     string   `yaml:"keyring_dir"`
