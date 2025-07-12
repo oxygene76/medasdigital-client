@@ -28,19 +28,23 @@ func NewClient(clientCtx client.Context) *Client {
 	// Create codec
 	codec := NewCodec()
 	
-	// Ensure TxConfig is properly set in clientCtx
-	if clientCtx.TxConfig == nil {
-		clientCtx = clientCtx.WithTxConfig(codec.GetTxConfig())
-	}
-	
-	// Create transaction factory with proper configuration
+	// Create transaction factory with basic configuration
+	// TxConfig wird vom clientCtx bereitgestellt, nicht vom codec
 	txFactory := tx.Factory{}.
-		WithTxConfig(clientCtx.TxConfig).
-		WithAccountRetriever(clientCtx.AccountRetriever).
 		WithKeybase(clientCtx.Keyring).
 		WithChainID(clientCtx.ChainID).
 		WithSimulateAndExecute(true).
 		WithGas(200000)
+	
+	// Set TxConfig from clientCtx if available
+	if clientCtx.TxConfig != nil {
+		txFactory = txFactory.WithTxConfig(clientCtx.TxConfig)
+	}
+	
+	// Set AccountRetriever from clientCtx if available
+	if clientCtx.AccountRetriever != nil {
+		txFactory = txFactory.WithAccountRetriever(clientCtx.AccountRetriever)
+	}
 
 	return &Client{
 		clientCtx:  clientCtx,
