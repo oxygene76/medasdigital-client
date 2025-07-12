@@ -377,7 +377,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Project Repository**: https://github.com/oxygene76/medasdigital-client
 - **Technical Support**: support@medas-digital.io
 - **Scientific Inquiries**: science@medas-digital.io
-- **Blockchain Explorer**: https://explorer.medas-digital.io
+- **Blockchain Explorer**: https://explorer.medas-digital.io:3100
 
 ---
 
