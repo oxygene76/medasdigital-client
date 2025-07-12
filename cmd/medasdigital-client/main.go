@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+    	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -285,7 +285,34 @@ metadataMap["registration_type"] = "client_registration"
 fmt.Println("📝 Registering client using standard blockchain transaction...")
 
 // Set FromName in clientCtx for signing
-clientCtx = clientCtx.WithFromName(from).WithFromAddress(addr)
+// Set FromName in clientCtx for signing and ensure TxConfig is set
+if globalInterfaceRegistry == nil {
+    globalInterfaceRegistry = getInterfaceRegistry()
+}
+if globalCodec == nil {
+    globalCodec = codec.NewProtoCodec(globalInterfaceRegistry)
+}
+
+// Create TxConfig
+txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
+
+// Create RPC client
+rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+if err != nil {
+    fmt.Printf("❌ Failed to create RPC client: %v\n", err)
+    return simulateRegistration(from, addr.String(), capabilities, metadata)
+}
+
+// Complete clientCtx with all required fields
+clientCtx = clientCtx.
+    WithFromName(from).
+    WithFromAddress(addr).
+    WithTxConfig(txConfig).
+    WithClient(rpcClient).
+    WithChainID(cfg.Chain.ID).
+    WithCodec(globalCodec).
+    WithInterfaceRegistry(globalInterfaceRegistry).
+    WithBroadcastMode(flags.BroadcastSync)
 
 // Use simple registration method
 result, err := registerClientSimple(clientCtx, addr.String(), capabilities, metadata, gas)
@@ -1367,7 +1394,14 @@ func registerClientSimple(clientCtx client.Context, fromAddress string, capabili
 		return nil, fmt.Errorf("from name not set in client context")
 	}
 
-	err = tx.Sign(context.Background(), tx.Factory{}, fromName, txBuilder, true)
+	// Create a proper tx factory
+txFactory := tx.Factory{}.
+    WithChainID(clientCtx.ChainID).
+    WithKeybase(clientCtx.Keyring).
+    WithTxConfig(clientCtx.TxConfig).
+    WithAccountRetriever(authtypes.AccountRetriever{})
+
+err = tx.Sign(context.Background(), txFactory, fromName, txBuilder, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
