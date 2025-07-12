@@ -213,17 +213,45 @@ a unique client ID and registers the client's capabilities.`,
 		fmt.Printf("🔍 Testing connection to %s...\n", cfg.Chain.RPCEndpoint)
 		
 		if err := testBlockchainConnection(cfg.Chain.RPCEndpoint); err != nil {
-			fmt.Printf("⚠️  Blockchain connection failed: %v\n", err)
-			fmt.Println("💡 Running in simulation mode...")
-			return simulateRegistration(from, addr.String(), capabilities, metadata)
+		fmt.Printf("⚠️  Blockchain connection failed: %v\n", err)
+    		fmt.Println("💡 Running in simulation mode...")
+    		return simulateRegistration(from, addr.String(), capabilities, metadata)
 		}
-		
-		// Wenn Connection OK ist, aber wir noch keine vollständige Tx-Implementation haben
+
 		fmt.Println("✅ Blockchain connection successful!")
-		fmt.Println("📡 Full transaction support coming soon...")
-		fmt.Println("💡 Running enhanced simulation...")
-		
-		return simulateRegistration(from, addr.String(), capabilities, metadata)
+		fmt.Println("📡 Sending real transaction to blockchain...")
+
+		// Create blockchain client with proper context
+		blockchainClient, err := createFullBlockchainClient(clientCtx, cfg)
+		if err != nil {
+    			fmt.Printf("❌ Failed to create blockchain client: %v\n", err)
+    			fmt.Println("💡 Falling back to simulation...")
+    			return simulateRegistration(from, addr.String(), capabilities, metadata)
+		}
+
+		// Prepare metadata
+		metadataMap := make(map[string]interface{})
+		if metadata != "" {
+    			metadataMap["description"] = metadata
+		}
+		metadataMap["timestamp"] = time.Now().Unix()
+		metadataMap["client_version"] = version
+
+		// ✅ REAL BLOCKCHAIN REGISTRATION
+		clientID, err := blockchainClient.RegisterClient(addr.String(), capabilities, metadataMap)
+		if err != nil {
+    			fmt.Printf("❌ Blockchain registration failed: %v\n", err)
+    			fmt.Println("💡 Falling back to simulation...")
+    			return simulateRegistration(from, addr.String(), capabilities, metadata)
+		}
+
+		fmt.Println("🎉 Client successfully registered on blockchain!")
+		fmt.Printf("🆔 Client ID: %s\n", clientID)
+		fmt.Printf("📍 Address: %s\n", addr.String())
+		fmt.Printf("🔧 Capabilities: %v\n", capabilities)
+
+		return nil
+
 	},
 }
 
@@ -831,6 +859,25 @@ func initKeysClientContextWithBackend(keyringBackend string) (client.Context, er
 	return clientCtx, nil
 }
 
+func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockchain.Client, error) {
+    // Create RPC client
+    rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create RPC client: %w", err)
+    }
+    
+    // Create complete client context
+    fullClientCtx := clientCtx.
+        WithClient(rpcClient).
+        WithChainID(cfg.Chain.ID).
+        WithNodeURI(cfg.Chain.RPCEndpoint).
+        WithOffline(false)
+    
+    // Create blockchain client
+    blockchainClient := blockchain.NewClient(fullClientCtx)
+    
+    return blockchainClient, nil
+}
 
 // Neue sichere Connection-Test Funktion:
 func testBlockchainConnection(rpcEndpoint string) error {
