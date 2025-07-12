@@ -859,7 +859,7 @@ func initKeysClientContextWithBackend(keyringBackend string) (client.Context, er
 	return clientCtx, nil
 }
 
-/ Helper function to create blockchain client
+// Helper function to create blockchain client
 func createBlockchainClient(clientCtx client.Context) (*blockchain.Client, error) {
 	// Load config
 	cfg := loadConfig()
