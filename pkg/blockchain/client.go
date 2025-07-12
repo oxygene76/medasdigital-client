@@ -147,48 +147,44 @@ func (c *Client) DeactivateClient(creator, clientID string) error {
 	return nil
 }
 
-// Fügen Sie Debug-Informationen in sendTransaction hinzu:
-
+// sendTransaction signs and broadcasts a transaction
 func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxResponse, error) {
-	fmt.Printf("🔧 sendTransaction called with signer: %s\n", signerName)
-	
 	// Create transaction builder
 	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
 	if err := txBuilder.SetMsgs(msg); err != nil {
 		return nil, fmt.Errorf("failed to set messages: %w", err)
 	}
-	
-	fmt.Println("🔧 Setting fixed gas limit (no estimation)")
-	// Set fixed gas limit - NO ESTIMATION
-	txBuilder.SetGasLimit(200000)
-	
-	fmt.Println("🔧 Setting fee amount")
-	// Set fee
-	fees := sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(5000)))
-	txBuilder.SetFeeAmount(fees)
 
-	fmt.Printf("🔧 Signing transaction with: %s\n", signerName)
-	// Sign transaction
-	err := tx.Sign(context.Background(), c.txFactory, signerName, txBuilder, true)
+	// Estimate gas
+	gasLimit, err := c.estimateGas([]sdk.Msg{msg})
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate gas: %w", err)
+	}
+
+	// Set gas limit with buffer
+	txBuilder.SetGasLimit(gasLimit)
+
+	// Set fee (optional - can be calculated from gas price)
+	// For now, we'll let the node calculate the fee
+
+	// Sign transaction - FIXED: Added context parameter for v0.50
+	err = tx.Sign(context.Background(), c.txFactory, signerName, txBuilder, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
 
-	fmt.Println("🔧 Encoding transaction")
 	// Encode transaction
 	txBytes, err := c.clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode transaction: %w", err)
 	}
 
-	fmt.Println("🔧 Broadcasting transaction")
 	// Broadcast transaction
 	res, err := c.clientCtx.BroadcastTx(txBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to broadcast transaction: %w", err)
 	}
 
-	fmt.Println("✅ Transaction sent successfully!")
 	return res, nil
 }
 
