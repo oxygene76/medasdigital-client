@@ -24,7 +24,6 @@ import (
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"           // Für TxConfig
 	"github.com/cosmos/cosmos-sdk/client/flags"              // Für BroadcastMode
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"    // Für AccountRetriever
-	"github.com/cosmos/cosmos-sdk/types/tx/signing"          // Für SignModes
 
 	blockchain "github.com/oxygene76/medasdigital-client/pkg/blockchain"  // Wieder hinzufügen
 	medasClient "github.com/oxygene76/medasdigital-client/pkg/client"
