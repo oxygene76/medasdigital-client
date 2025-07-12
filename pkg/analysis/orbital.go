@@ -75,12 +75,14 @@ func (m *Manager) AnalyzeOrbitalDynamics(inputFile string) (*types.AnalysisResul
 		analysisResult.Metadata["gpu_used"] = "false"
 	}
 	if m.gpuManager != nil && m.gpuManager.IsEnabled() {
-		analysisResult.Metadata.GPUDevices = m.gpuManager.GetConfiguredDevices()
+		analysisResult.Metadata["gpu_used"] = "true"
+		devices := m.gpuManager.GetConfiguredDevices()
+		analysisResult.Metadata["gpu_devices"] = fmt.Sprintf("%v", devices)
 	}
 
-	log.Printf("Orbital dynamics analysis completed in %v", analysisResult.Duration)
+	log.Printf("Orbital dynamics analysis completed in %v", time.Since(start))
 	return analysisResult, nil
-}
+	}
 
 // loadTNOData loads TNO data from CSV file
 func (m *Manager) loadTNOData(filename string) ([]types.TNOObject, error) {
