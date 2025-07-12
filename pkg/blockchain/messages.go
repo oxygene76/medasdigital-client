@@ -132,6 +132,63 @@ func (msg *MsgRegisterClient) String() string {
 	return fmt.Sprintf("MsgRegisterClient{Creator: %s, Capabilities: %v}", msg.Creator, msg.Capabilities)
 }
 
+func (*MsgRegisterClient) XXX_MessageName() string {
+	return "medas.clientregistry.v1.MsgRegisterClient"
+}
+
+func (*MsgRegisterClient) XXX_WellKnownType() string {
+	return "MsgRegisterClient"
+}
+
+func (*MsgRegisterClient) XXX_FullyQualifiedName() string {
+	return "medas.clientregistry.v1.MsgRegisterClient"
+}
+
+// ===== FÜR MsgStoreAnalysis =====
+// Fügen Sie nach der String() Methode hinzu:
+
+func (*MsgStoreAnalysis) XXX_MessageName() string {
+	return "medas.analysis.v1.MsgStoreAnalysis"
+}
+
+func (*MsgStoreAnalysis) XXX_WellKnownType() string {
+	return "MsgStoreAnalysis"
+}
+
+func (*MsgStoreAnalysis) XXX_FullyQualifiedName() string {
+	return "medas.analysis.v1.MsgStoreAnalysis"
+}
+
+// ===== FÜR MsgUpdateClient =====
+// Fügen Sie nach der String() Methode hinzu:
+
+func (*MsgUpdateClient) XXX_MessageName() string {
+	return "medas.clientregistry.v1.MsgUpdateClient"
+}
+
+func (*MsgUpdateClient) XXX_WellKnownType() string {
+	return "MsgUpdateClient"
+}
+
+func (*MsgUpdateClient) XXX_FullyQualifiedName() string {
+	return "medas.clientregistry.v1.MsgUpdateClient"
+}
+
+// ===== FÜR MsgDeactivateClient =====
+// Fügen Sie nach der String() Methode hinzu:
+
+func (*MsgDeactivateClient) XXX_MessageName() string {
+	return "medas.clientregistry.v1.MsgDeactivateClient"
+}
+
+func (*MsgDeactivateClient) XXX_WellKnownType() string {
+	return "MsgDeactivateClient"
+}
+
+func (*MsgDeactivateClient) XXX_FullyQualifiedName() string {
+	return "medas.clientregistry.v1.MsgDeactivateClient"
+}
+
 // MsgStoreAnalysis defines the message for storing analysis results
 type MsgStoreAnalysis struct {
 	Creator      string `protobuf:"bytes,1,opt,name=creator,proto3" json:"creator,omitempty"`
