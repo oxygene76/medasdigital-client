@@ -49,7 +49,7 @@ const (
 	defaultChainID     = "medasdigital-2"
 	defaultRPCEndpoint = "https://rpc.medas-digital.io:26657"
 	defaultBech32Prefix = "medas"
-	defaultBaseDenom    = "medas"        // ← NEU HINZUFÜGEN
+	defaultBaseDenom    = "umedas"        // ← NEU HINZUFÜGEN
 )
 
 var (
@@ -1358,10 +1358,14 @@ func registerClientSimple(clientCtx client.Context, fromAddress string, capabili
 
 	// Load config to get base denom
 	cfg := loadConfig()
-	baseDenom := cfg.Chain.BaseDenom
-	if baseDenom == "" {
-		baseDenom = "stake" // Fallback
-	}
+baseDenom := cfg.Chain.BaseDenom
+fmt.Printf("🔍 Config BaseDenom: '%s'\n", baseDenom)
+if baseDenom == "" {
+    baseDenom = "stake" // Fallback
+    fmt.Println("⚠️  Using fallback denom: stake")
+} else {
+    fmt.Printf("✅ Using config denom: %s\n", baseDenom)
+}
 
 	// Create MsgSend (send 1 smallest unit to self)
 	amount := sdk.NewCoins(sdk.NewCoin(baseDenom, sdkmath.NewInt(1)))
