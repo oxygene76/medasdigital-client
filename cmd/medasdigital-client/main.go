@@ -860,23 +860,41 @@ func initKeysClientContextWithBackend(keyringBackend string) (client.Context, er
 }
 
 func createFullBlockchainClient(clientCtx client.Context, cfg *Config) (*blockchain.Client, error) {
-    // Create RPC client
-    rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create RPC client: %w", err)
-    }
-    
-    // Create complete client context
-    fullClientCtx := clientCtx.
-        WithClient(rpcClient).
-        WithChainID(cfg.Chain.ID).
-        WithNodeURI(cfg.Chain.RPCEndpoint).
-        WithOffline(false)
-    
-    // Create blockchain client
-    blockchainClient := blockchain.NewClient(fullClientCtx)
-    
-    return blockchainClient, nil
+	// Create RPC client
+	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC client: %w", err)
+	}
+	
+	// Use the global codec instances that we already created
+	if globalInterfaceRegistry == nil {
+		globalInterfaceRegistry = getInterfaceRegistry()
+	}
+	if globalCodec == nil {
+		globalCodec = codec.NewProtoCodec(globalInterfaceRegistry)
+	}
+	
+	// Create TxConfig using our global codec
+	txConfig := tx.NewTxConfig(globalCodec, tx.DefaultSignModes)
+	
+	// Create complete client context with all required components
+	fullClientCtx := clientCtx.
+		WithClient(rpcClient).
+		WithChainID(cfg.Chain.ID).
+		WithCodec(globalCodec).
+		WithInterfaceRegistry(globalInterfaceRegistry).
+		WithTxConfig(txConfig).
+		WithNodeURI(cfg.Chain.RPCEndpoint).
+		WithOffline(false).
+		WithGenerateOnly(false).
+		WithSimulation(false).
+		WithUseLedger(false).
+		WithBroadcastMode(flags.BroadcastSync)
+	
+	// Create blockchain client
+	blockchainClient := blockchain.NewClient(fullClientCtx)
+	
+	return blockchainClient, nil
 }
 
 // Neue sichere Connection-Test Funktion:
