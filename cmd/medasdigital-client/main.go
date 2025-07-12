@@ -1393,8 +1393,16 @@ if baseDenom == "" {
 	}
 
 	// Calculate fee (simple fee calculation)
-	gasLimit := txBuilder.GetTx().GetGas()
-	feeAmount := sdk.NewCoins(sdk.NewCoin(baseDenom, sdkmath.NewInt(int64(gasLimit*1000))))
+	// Calculate fee based on chain requirements (5000umedas for 200k gas)
+gasLimit := txBuilder.GetTx().GetGas()
+// Simple calculation: 5000umedas for 200k gas = 0.025 umedas per gas unit
+feePerGas := sdkmath.NewInt(25) // 0.025 * 1000 = 25 (to avoid decimals)
+totalFee := feePerGas.Mul(sdkmath.NewInt(int64(gasLimit))).Quo(sdkmath.NewInt(1000))
+if totalFee.LT(sdkmath.NewInt(5000)) {
+    totalFee = sdkmath.NewInt(5000) // Minimum fee
+}
+feeAmount := sdk.NewCoins(sdk.NewCoin(baseDenom, totalFee))
+fmt.Printf("💰 Calculated fee: %s %s\n", totalFee.String(), baseDenom)
 	txBuilder.SetFeeAmount(feeAmount)
 
 	// Sign transaction
@@ -1425,8 +1433,9 @@ txFactory = txFactory.
     WithAccountNumber(account.GetAccountNumber()).
     WithSequence(account.GetSequence())
 
-fmt.Printf("🔍 Account Number: %d, Sequence: %d\n", account.GetAccountNumber(), 
+	fmt.Printf("🔍 Account Number: %d, Sequence: %d\n", account.GetAccountNumber(), account.GetSequence())
 	err = tx.Sign(context.Background(), txFactory, fromName, txBuilder, true)
+	
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
