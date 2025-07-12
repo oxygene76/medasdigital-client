@@ -1305,6 +1305,109 @@ func updateRegistrationIndex(result *RegistrationResult) error {
 	return os.WriteFile(indexPath, data, 0644)
 }
 
+// Register client using standard MsgSend with memo
+func registerClientSimple(clientCtx client.Context, fromAddress string, capabilities []string, metadata string, gas uint64) (*RegistrationResult, error) {
+	// Create registration data
+	regData := ClientRegistrationData{
+		ClientAddress: fromAddress,
+		Capabilities:  capabilities,
+		Metadata:      metadata,
+		Timestamp:     time.Now(),
+		Version:       "1.0.0",
+	}
+
+	// Convert to JSON for memo
+	memoBytes, err := json.Marshal(regData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal registration data: %w", err)
+	}
+
+	// Create a minimal self-send transaction with registration data in memo
+	fromAddr, err := sdk.AccAddressFromBech32(fromAddress)
+	if err != nil {
+		return nil, fmt.Errorf("invalid from address: %w", err)
+	}
+
+	// Load config to get base denom
+	cfg := loadConfig()
+	baseDenom := cfg.Chain.BaseDenom
+	if baseDenom == "" {
+		baseDenom = "stake" // Fallback
+	}
+
+	// Create MsgSend (send 1 smallest unit to self)
+	amount := sdk.NewCoins(sdk.NewCoin(baseDenom, sdk.NewInt(1)))
+	msgSend := banktypes.NewMsgSend(fromAddr, fromAddr, amount)
+
+	// Create transaction
+	txBuilder := clientCtx.TxConfig.NewTxBuilder()
+	if err := txBuilder.SetMsgs(msgSend); err != nil {
+		return nil, fmt.Errorf("failed to set messages: %w", err)
+	}
+
+	// Set memo with registration data
+	txBuilder.SetMemo(string(memoBytes))
+
+	// Set gas and fees
+	if gas > 0 {
+		txBuilder.SetGasLimit(gas)
+	} else {
+		txBuilder.SetGasLimit(200000) // Reasonable default for MsgSend
+	}
+
+	// Calculate fee (simple fee calculation)
+	gasLimit := txBuilder.GetTx().GetGas()
+	feeAmount := sdk.NewCoins(sdk.NewCoin(baseDenom, sdk.NewInt(int64(gasLimit*1000))))
+	txBuilder.SetFeeAmount(feeAmount)
+
+	// Sign transaction
+	fromName := clientCtx.GetFromName()
+	if fromName == "" {
+		return nil, fmt.Errorf("from name not set in client context")
+	}
+
+	err = tx.Sign(clientCtx.TxConfig.SignModeHandler(), fromName, txBuilder, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign transaction: %w", err)
+	}
+
+	// Broadcast transaction
+	txBytes, err := clientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode transaction: %w", err)
+	}
+
+	// Broadcast
+	result, err := clientCtx.BroadcastTx(txBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to broadcast transaction: %w", err)
+	}
+
+	if result.Code != 0 {
+		return nil, fmt.Errorf("transaction failed with code %d: %s", result.Code, result.Log)
+	}
+
+	// Generate client ID from transaction hash
+	clientID := generateClientID(result.TxHash)
+
+	// Create result
+	regResult := &RegistrationResult{
+		TransactionHash:  result.TxHash,
+		ClientID:         clientID,
+		RegistrationData: regData,
+		BlockHeight:      result.Height,
+		RegisteredAt:     time.Now(),
+	}
+
+	// Save registration locally
+	if err := saveRegistrationResult(regResult); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to save registration locally: %v\n", err)
+		// Don't fail the entire operation for this
+	}
+
+	return regResult, nil
+}
+
 func main() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
