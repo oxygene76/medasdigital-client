@@ -218,7 +218,20 @@ type TNOObject struct {
 	Observations    []Observation   `json:"observations"`
 	Confidence      float64         `json:"confidence"`        // Detection confidence (0-1)
 	Status          string          `json:"status"`            // "confirmed", "candidate", "rejected"
+        // Felder die orbital.go braucht:
+	Designation         string  `json:"designation"`
+	SemimajorAxis      float64 `json:"semimajor_axis"`
+	Eccentricity       float64 `json:"eccentricity"`
+	Inclination        float64 `json:"inclination"`
+	LongitudeNode      float64 `json:"longitude_node"`
+	ArgumentPeriapsis  float64 `json:"argument_periapsis"`
+	MeanAnomaly        float64 `json:"mean_anomaly"`
+	Epoch              float64 `json:"epoch"`
+	AbsoluteMagnitude  float64 `json:"absolute_magnitude"`
+	AlbedoEstimate     float64 `json:"albedo_estimate"`
+	DiameterKM         float64 `json:"diameter_km"`
 }
+
 
 // PhysicalData represents physical properties of an object
 type PhysicalData struct {
