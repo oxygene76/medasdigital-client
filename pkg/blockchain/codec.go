@@ -148,9 +148,18 @@ func (c *Codec) ValidateAddress(addr string) error {
 
 // RegisterInterfaces registers the interfaces for protobuf
 func RegisterInterfaces(registry types.InterfaceRegistry) {
-	// Register all message types in one call
+	// ✅ AKTIVIERT: Mit eindeutigen Proto-Message-Namen
 	registry.RegisterImplementations(
 		(*sdk.Msg)(nil),
+		&MsgRegisterClient{},
+		&MsgStoreAnalysis{},
+		&MsgUpdateClient{},
+		&MsgDeactivateClient{},
+	)
+	
+	// Zusätzlich: Registrierung für Proto-Message Interface
+	registry.RegisterImplementations(
+		(*proto.Message)(nil),
 		&MsgRegisterClient{},
 		&MsgStoreAnalysis{},
 		&MsgUpdateClient{},
