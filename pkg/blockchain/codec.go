@@ -133,31 +133,27 @@ func (c *Codec) ValidateAddress(addr string) error {
 }
 
 // RegisterInterfaces registers the interfaces for protobuf
+// Simplified RegisterInterfaces function for codec.go
+
+// RegisterInterfaces registers the interfaces for protobuf - SIMPLIFIED VERSION
 func RegisterInterfaces(registry types.InterfaceRegistry) {
-    // Ersetzen Sie den gesamten Inhalt mit:
-    
-    // Client registry messages
-    registry.RegisterImplementations(
-        (*sdk.Msg)(nil),
-        &MsgRegisterClient{},
-    )
-    
-    registry.RegisterImplementations(
-        (*sdk.Msg)(nil),
-        &MsgUpdateClient{},
-    )
-    
-    registry.RegisterImplementations(
-        (*sdk.Msg)(nil),
-        &MsgDeactivateClient{},
-    )
-    
-    // Analysis messages  
-    registry.RegisterImplementations(
-        (*sdk.Msg)(nil),
-        &MsgStoreAnalysis{},
-    )
+	// Register all message types in one call with different interfaces
+	registry.RegisterImplementations(
+		(*sdk.Msg)(nil),
+		&MsgRegisterClient{},
+		&MsgUpdateClient{},
+		&MsgDeactivateClient{},
+		&MsgStoreAnalysis{},
+	)
 }
+
+// Alternative: Comment out the entire RegisterInterfaces function temporarily
+// to see if the client works without message registration
+/*
+func RegisterInterfaces(registry types.InterfaceRegistry) {
+	// Temporarily disabled for testing
+}
+*/
 
 // RegisterLegacyAminoCodec registers the legacy amino codec
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
