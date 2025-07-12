@@ -133,20 +133,10 @@ func (c *Codec) ValidateAddress(addr string) error {
 }
 
 // RegisterInterfaces registers the interfaces for protobuf
-/
-// RegisterInterfaces registers the interfaces for protobuf
 func RegisterInterfaces(registry types.InterfaceRegistry) {
 	// Temporarily disabled to fix TypeURL conflict
 	// TODO: Implement proper proto message definitions with unique TypeURLs
 }
-
-// Alternative: Comment out the entire RegisterInterfaces function temporarily
-// to see if the client works without message registration
-/*
-func RegisterInterfaces(registry types.InterfaceRegistry) {
-	// Temporarily disabled for testing
-}
-*/
 
 // RegisterLegacyAminoCodec registers the legacy amino codec
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
