@@ -189,25 +189,68 @@ func (c *Client) sendTransaction(msg sdk.Msg, signerName string) (*sdk.TxRespons
 }
 
 
-// estimateGas estimates gas for a transaction - FIXED: Handle 3 return values
+// Fügen Sie Debug-Information zur estimateGas Funktion hinzu:
+
 func (c *Client) estimateGas(msgs []sdk.Msg) (uint64, error) {
+	fmt.Println("🔧 Starting gas estimation...")
+	
+	// ✅ DEBUG: Keyring-Informationen anzeigen
+	fmt.Printf("🔑 Keyring Info:\n")
+	fmt.Printf("   Keyring Backend: %s\n", c.clientCtx.Keyring.Backend())
+	
+	// Testen ob der Keyring die benötigten Keys hat
+	keys, err := c.clientCtx.Keyring.List()
+	if err != nil {
+		fmt.Printf("   ❌ Keyring List Error: %v\n", err)
+	} else {
+		fmt.Printf("   ✅ Available Keys: %d\n", len(keys))
+		for _, key := range keys {
+			fmt.Printf("     - %s\n", key.Name)
+		}
+	}
+	
+	// ✅ SICHER: Verwenden Sie explizit den gleichen Keyring
+	simClientCtx := c.clientCtx.
+		WithKeyring(c.clientCtx.Keyring). // Explizit gleicher Keyring
+		WithSimulation(true).
+		WithOffline(false).
+		WithGenerateOnly(false)
+	
+	// ✅ SICHER: TxFactory mit explizit gleichem Keyring
+	simFactory := tx.Factory{}.
+		WithKeybase(c.clientCtx.Keyring). // Explizit gleicher Keyring
+		WithTxConfig(c.clientCtx.TxConfig).
+		WithAccountRetriever(c.clientCtx.AccountRetriever).
+		WithChainID(c.clientCtx.ChainID).
+		WithSimulateAndExecute(false).
+		WithGas(1000000).
+		WithGasAdjustment(1.0)
+	
+	fmt.Println("🔧 Using explicit keyring for simulation...")
+	
+	// Rest der estimateGas Funktion bleibt gleich...
 	txBuilder := c.clientCtx.TxConfig.NewTxBuilder()
 	if err := txBuilder.SetMsgs(msgs...); err != nil {
 		return 0, fmt.Errorf("failed to set messages: %w", err)
 	}
 
-	// Set temporary gas limit for simulation
 	txBuilder.SetGasLimit(1000000)
-
-	// Calculate gas - FIXED: v0.50 returns 3 values: simRes, adjustedGas, error
-	simRes, adjustedGas, err := tx.CalculateGas(c.clientCtx, c.txFactory, msgs...)
+	
+	fmt.Println("🔧 Calculating gas...")
+	simRes, adjustedGas, err := tx.CalculateGas(simClientCtx, simFactory, msgs...)
 	if err != nil {
-		return 0, fmt.Errorf("failed to calculate gas: %w", err)
+		fmt.Printf("⚠️  Gas calculation failed: %v\n", err)
+		fmt.Println("📏 Falling back to conservative estimate...")
+		return c.estimateGasFallback(msgs), nil
 	}
 
-	// Use the adjusted gas value (uint64) - simRes contains detailed simulation info
-	_ = simRes // We can use this for detailed gas info if needed in the future
-	return adjustedGas, nil
+	fmt.Printf("✅ Gas estimation successful: %d\n", adjustedGas)
+	_ = simRes
+	
+	gasWithBuffer := uint64(float64(adjustedGas) * 1.1)
+	fmt.Printf("📊 Gas with buffer: %d\n", gasWithBuffer)
+	
+	return gasWithBuffer, nil
 }
 
 // GetClient retrieves client information
