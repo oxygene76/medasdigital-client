@@ -531,3 +531,24 @@ func (cr *ClusteringResult) String() string {
 	return fmt.Sprintf("ClusteringResult{Clusters: %d, Algorithm: %s, QualityScore: %.2f}",
 		len(cr.Clusters), cr.Algorithm, cr.QualityScore)
 }
+
+// AnalysisMetadata represents analysis metadata (for compatibility)
+type AnalysisMetadata struct {
+	InputFiles []string               `json:"input_files"`
+	Parameters map[string]interface{} `json:"parameters"`
+	GPUUsed    bool                   `json:"gpu_used"`
+	GPUDevices interface{}            `json:"gpu_devices,omitempty"`
+	Version    string                 `json:"version"`
+}
+
+// Recommendation represents observation recommendations
+type Recommendation struct {
+	Priority     string    `json:"priority"`
+	RA           float64   `json:"ra"`
+	Dec          float64   `json:"dec"`
+	MagnitudeEst float64   `json:"magnitude_est"`
+	Urgency      string    `json:"urgency"`
+	Reason       string    `json:"reason"`
+	ValidFrom    time.Time `json:"valid_from"`
+	ValidUntil   time.Time `json:"valid_until"`
+}
