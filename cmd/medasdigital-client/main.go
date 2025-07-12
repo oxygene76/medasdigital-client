@@ -17,6 +17,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/std"
+	"github.com/cosmos/cosmos-sdk/client/tx"
+    	"github.com/cosmos/cosmos-sdk/client/flags"
 	"time"  // ← NEU für timestamp
 	blockchain "github.com/oxygene76/medasdigital-client/pkg/blockchain"  
 
