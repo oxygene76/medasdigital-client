@@ -13,6 +13,12 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	
+	"github.com/cosmos/cosmos-sdk/client/tx"
+
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -21,6 +27,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/std"
+
+
 	
 	// ✅ KORREKTE v0.50 IMPORTS für echte Blockchain-Kommunikation:
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"           // Für TxConfig
