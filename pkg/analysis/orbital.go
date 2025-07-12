@@ -49,11 +49,11 @@ func (m *Manager) AnalyzeOrbitalDynamics(inputFile string) (*types.AnalysisResul
 	analysisResult := &types.AnalysisResult{
 		AnalysisType: "orbital_dynamics",
 		Data: map[string]interface{}{
-			"id":              fmt.Sprintf("orbital_%d", time.Now().Unix()),
-			"type":            "orbital_dynamics", 
-			"status":          "completed",
+			"id":               fmt.Sprintf("orbital_%d", time.Now().Unix()),
+			"type":             "orbital_dynamics",
+			"status":           "completed",
 			"orbital_analysis": result,
-			"duration":        time.Since(start),
+			"duration":         time.Since(start).String(),
 		},
 		Metadata: map[string]string{
 			"input_files":     inputFile,
@@ -61,10 +61,10 @@ func (m *Manager) AnalyzeOrbitalDynamics(inputFile string) (*types.AnalysisResul
 			"analysis_method": "n_body_simulation",
 			"version":         "1.0.0",
 		},
-		Timestamp: time.Now(),
-		ClientID:  "",
+		Timestamp:   time.Now(),
+		ClientID:    "",
 		BlockHeight: 0,
-		TxHash:    "",
+		TxHash:      "",
 	}
 
 	// Add GPU info if available
@@ -74,15 +74,10 @@ func (m *Manager) AnalyzeOrbitalDynamics(inputFile string) (*types.AnalysisResul
 	} else {
 		analysisResult.Metadata["gpu_used"] = "false"
 	}
-	if m.gpuManager != nil && m.gpuManager.IsEnabled() {
-		analysisResult.Metadata["gpu_used"] = "true"
-		devices := m.gpuManager.GetConfiguredDevices()
-		analysisResult.Metadata["gpu_devices"] = fmt.Sprintf("%v", devices)
-	}
 
 	log.Printf("Orbital dynamics analysis completed in %v", time.Since(start))
 	return analysisResult, nil
-	}
+}
 
 // loadTNOData loads TNO data from CSV file
 func (m *Manager) loadTNOData(filename string) ([]types.TNOObject, error) {
@@ -187,13 +182,13 @@ func (m *Manager) performOrbitalAnalysis(objects []types.TNOObject) (*types.Orbi
 
 	// Calculate clustering significance
 	clusteringSig := m.calculateClusteringSignificance(objects)
-	
+
 	// Simulate gravitational effects
 	gravEffects := m.simulateGravitationalEffects(objects)
-	
+
 	// Calculate Planet 9 probability
 	planet9Prob := m.calculatePlanet9Probability(objects, gravEffects)
-	
+
 	// Generate recommendations
 	recommendations := m.generateRecommendations(objects, gravEffects)
 
@@ -217,7 +212,7 @@ func (m *Manager) calculateClusteringSignificance(objects []types.TNOObject) flo
 	// Extract orbital elements for clustering analysis
 	var periapsisAngles []float64
 	var inclinations []float64
-	
+
 	for _, obj := range objects {
 		// Consider only distant objects (a > 30 AU) with high eccentricity
 		if obj.SemimajorAxis > 30 && obj.Eccentricity > 0.3 {
@@ -234,7 +229,7 @@ func (m *Manager) calculateClusteringSignificance(objects []types.TNOObject) flo
 	// In reality, this would be much more sophisticated
 	meanPeriapsis := stat.Mean(periapsisAngles, nil)
 	stdPeriapsis := stat.StdDev(periapsisAngles, nil)
-	
+
 	meanInclination := stat.Mean(inclinations, nil)
 	stdInclination := stat.StdDev(inclinations, nil)
 
@@ -245,8 +240,8 @@ func (m *Manager) calculateClusteringSignificance(objects []types.TNOObject) flo
 
 	// Combined significance
 	significance := math.Sqrt(periapsisSig*periapsisSig + inclinationSig*inclinationSig)
-	
-	log.Printf("Clustering analysis: periapsis=%.2f±%.2f°, inclination=%.2f±%.2f°, significance=%.2fσ", 
+
+	log.Printf("Clustering analysis: periapsis=%.2f±%.2f°, inclination=%.2f±%.2f°, significance=%.2fσ",
 		meanPeriapsis, stdPeriapsis, meanInclination, stdInclination, significance)
 
 	return significance
@@ -257,11 +252,11 @@ func (m *Manager) simulateGravitationalEffects(objects []types.TNOObject) []type
 	var effects []types.GravEffect
 
 	// Hypothetical Planet 9 parameters
-	planet9Mass := 10.0 // Earth masses
-	planet9Distance := 600.0 // AU
+	planet9Mass := 10.0       // Earth masses
+	planet9Distance := 600.0  // AU
 	planet9Inclination := 30.0 // degrees
 
-	log.Printf("Simulating gravitational effects for Planet 9 (mass=%.1f M⊕, distance=%.1f AU)", 
+	log.Printf("Simulating gravitational effects for Planet 9 (mass=%.1f M⊕, distance=%.1f AU)",
 		planet9Mass, planet9Distance)
 
 	for _, obj := range objects {
@@ -287,18 +282,18 @@ func (m *Manager) calculateGravitationalEffect(obj types.TNOObject, p9Mass, p9Di
 
 	// Distance factor (closer objects are more affected)
 	distanceFactor := math.Max(0.1, 1.0/(1.0+math.Abs(obj.SemimajorAxis-p9Distance)/100.0))
-	
+
 	// Mass factor
 	massFactor := p9Mass / 10.0 // Normalize to 10 Earth masses
-	
+
 	// Calculate perturbations (simplified)
 	deltaSemimajor := massFactor * distanceFactor * 0.5 * (math.Sin(obj.MeanAnomaly*math.Pi/180.0) + 1.0)
 	deltaEccentricity := massFactor * distanceFactor * 0.02 * math.Cos(obj.ArgumentPeriapsis*math.Pi/180.0)
 	deltaInclination := massFactor * distanceFactor * 0.1 * math.Sin((obj.Inclination-p9Inclination)*math.Pi/180.0)
-	
+
 	// Calculate significance based on magnitude of perturbations
-	significance := math.Sqrt(deltaSemimajor*deltaSemimajor + 
-		deltaEccentricity*deltaEccentricity*100 + 
+	significance := math.Sqrt(deltaSemimajor*deltaSemimajor +
+		deltaEccentricity*deltaEccentricity*100 +
 		deltaInclination*deltaInclination*10)
 
 	return types.GravEffect{
@@ -331,7 +326,7 @@ func (m *Manager) calculatePlanet9Probability(objects []types.TNOObject, effects
 	// In reality, this would involve sophisticated statistical modeling
 	probabilityBase := float64(significantEffects) / float64(len(objects))
 	significanceBoost := math.Min(1.0, totalSignificance/float64(len(effects))/5.0)
-	
+
 	probability := math.Min(0.95, probabilityBase*significanceBoost*2.0)
 
 	log.Printf("Planet 9 probability calculation: %d/%d significant effects, avg significance=%.2f, probability=%.2f",
@@ -398,48 +393,45 @@ func (m *Manager) generateRecommendations(objects []types.TNOObject, effects []t
 // AnalyzePhotometric performs photometric analysis (placeholder)
 func (m *Manager) AnalyzePhotometric(surveyData, targetList string) (*types.AnalysisResult, error) {
 	log.Printf("Starting photometric analysis on survey: %s", surveyData)
-	start := time.Now()
 
 	result := &types.AnalysisResult{
-	AnalysisType: "photometric_analysis",
-	Data: map[string]interface{}{
-		"id":      fmt.Sprintf("photometric_%d", time.Now().Unix()),
-		"type":    "photometric_analysis", 
-		"status":  "completed",
-		"message": "Photometric analysis placeholder",
-	},
-	Metadata: map[string]string{
-		"input_files": surveyData + "," + targetList,
-		"version":     "1.0.0",
-	},
-	Timestamp:   time.Now(),
-	ClientID:    "",
-	BlockHeight: 0,
-	TxHash:      "",
+		AnalysisType: "photometric_analysis",
+		Data: map[string]interface{}{
+			"id":      fmt.Sprintf("photometric_%d", time.Now().Unix()),
+			"status":  "completed",
+			"message": "Photometric analysis placeholder",
+		},
+		Metadata: map[string]string{
+			"input_files": surveyData + "," + targetList,
+			"version":     "1.0.0",
+		},
+		Timestamp:   time.Now(),
+		ClientID:    "",
+		BlockHeight: 0,
+		TxHash:      "",
 	}
+	
 	return result, nil
 }
 
 // AnalyzeClustering performs clustering analysis (placeholder)
 func (m *Manager) AnalyzeClustering() (*types.AnalysisResult, error) {
 	log.Println("Starting clustering analysis")
-	start := time.Now()
 
 	result := &types.AnalysisResult{
-	AnalysisType: "clustering_analysis",
-	Data: map[string]interface{}{
-		"id":      fmt.Sprintf("clustering_%d", time.Now().Unix()),
-		"type":    "clustering_analysis",
-		"status":  "completed", 
-		"message": "Clustering analysis placeholder",
-	},
-	Metadata: map[string]string{
-		"version": "1.0.0",
-	},
-	Timestamp:   time.Now(),
-	ClientID:    "",
-	BlockHeight: 0,
-	TxHash:      "",
+		AnalysisType: "clustering_analysis",
+		Data: map[string]interface{}{
+			"id":      fmt.Sprintf("clustering_%d", time.Now().Unix()),
+			"status":  "completed",
+			"message": "Clustering analysis placeholder",
+		},
+		Metadata: map[string]string{
+			"version": "1.0.0",
+		},
+		Timestamp:   time.Now(),
+		ClientID:    "",
+		BlockHeight: 0,
+		TxHash:      "",
 	}
 
 	return result, nil
@@ -448,26 +440,24 @@ func (m *Manager) AnalyzeClustering() (*types.AnalysisResult, error) {
 // AIDetection performs AI-powered object detection (placeholder)
 func (m *Manager) AIDetection(modelPath, surveyImages string, gpuAccel bool) (*types.AnalysisResult, error) {
 	log.Printf("Starting AI detection with model: %s", modelPath)
-	start := time.Now()
 
 	result := &types.AnalysisResult{
-	AnalysisType: "ai_detection",
-	Data: map[string]interface{}{
-		"id":      fmt.Sprintf("ai_detection_%d", time.Now().Unix()),
-		"type":    "ai_detection",
-		"status":  "completed",
-		"message": "AI detection placeholder",
-	},
-	Metadata: map[string]string{
-		"input_files": surveyImages,
-		"gpu_used":    fmt.Sprintf("%t", gpuAccel),
-		"version":     "1.0.0",
-	},
-	Timestamp:   time.Now(),
-	ClientID:    "",
-	BlockHeight: 0,
-	TxHash:      "",
-}
+		AnalysisType: "ai_detection",
+		Data: map[string]interface{}{
+			"id":      fmt.Sprintf("ai_detection_%d", time.Now().Unix()),
+			"status":  "completed",
+			"message": "AI detection placeholder",
+		},
+		Metadata: map[string]string{
+			"input_files": surveyImages,
+			"gpu_used":    fmt.Sprintf("%t", gpuAccel),
+			"version":     "1.0.0",
+		},
+		Timestamp:   time.Now(),
+		ClientID:    "",
+		BlockHeight: 0,
+		TxHash:      "",
+	}
 
 	return result, nil
 }
@@ -475,29 +465,27 @@ func (m *Manager) AIDetection(modelPath, surveyImages string, gpuAccel bool) (*t
 // TrainDeepDetector trains a deep learning detector (placeholder)
 func (m *Manager) TrainDeepDetector(trainingData, architecture string, gpuDevices []int, batchSize, epochs int) (*types.AnalysisResult, error) {
 	log.Printf("Starting deep detector training with architecture: %s", architecture)
-	start := time.Now()
 
 	result := &types.AnalysisResult{
-	AnalysisType: "ai_training",
-	Data: map[string]interface{}{
-		"id":      fmt.Sprintf("training_%d", time.Now().Unix()),
-		"type":    "ai_training",
-		"status":  "completed",
-		"message": "Deep detector training placeholder",
-	},
-	Metadata: map[string]string{
-		"input_files":  trainingData,
-		"gpu_used":     fmt.Sprintf("%t", len(gpuDevices) > 0),
-		"gpu_devices":  fmt.Sprintf("%v", gpuDevices),
-		"architecture": architecture,
-		"batch_size":   fmt.Sprintf("%d", batchSize),
-		"epochs":       fmt.Sprintf("%d", epochs),
-		"version":      "1.0.0",
-	},
-	Timestamp:   time.Now(),
-	ClientID:    "",
-	BlockHeight: 0,
-	TxHash:      "",
+		AnalysisType: "ai_training",
+		Data: map[string]interface{}{
+			"id":      fmt.Sprintf("training_%d", time.Now().Unix()),
+			"status":  "completed",
+			"message": "Deep detector training placeholder",
+		},
+		Metadata: map[string]string{
+			"input_files":  trainingData,
+			"gpu_used":     fmt.Sprintf("%t", len(gpuDevices) > 0),
+			"gpu_devices":  fmt.Sprintf("%v", gpuDevices),
+			"architecture": architecture,
+			"batch_size":   fmt.Sprintf("%d", batchSize),
+			"epochs":       fmt.Sprintf("%d", epochs),
+			"version":      "1.0.0",
+		},
+		Timestamp:   time.Now(),
+		ClientID:    "",
+		BlockHeight: 0,
+		TxHash:      "",
 	}
 
 	return result, nil
@@ -506,24 +494,22 @@ func (m *Manager) TrainDeepDetector(trainingData, architecture string, gpuDevice
 // TrainAnomalyDetector trains an anomaly detection model (placeholder)
 func (m *Manager) TrainAnomalyDetector() (*types.AnalysisResult, error) {
 	log.Println("Starting anomaly detector training")
-	start := time.Now()
 
 	result := &types.AnalysisResult{
-	AnalysisType: "anomaly_training",
-	Data: map[string]interface{}{
-		"id":      fmt.Sprintf("anomaly_training_%d", time.Now().Unix()),
-		"type":    "anomaly_training", 
-		"status":  "completed",
-		"message": "Anomaly detector training placeholder",
-	},
-	Metadata: map[string]string{
-		"version": "1.0.0",
-	},
-	Timestamp:   time.Now(),
-	ClientID:    "",
-	BlockHeight: 0,
-	TxHash:      "",
-}
+		AnalysisType: "anomaly_training",
+		Data: map[string]interface{}{
+			"id":      fmt.Sprintf("anomaly_training_%d", time.Now().Unix()),
+			"status":  "completed",
+			"message": "Anomaly detector training placeholder",
+		},
+		Metadata: map[string]string{
+			"version": "1.0.0",
+		},
+		Timestamp:   time.Now(),
+		ClientID:    "",
+		BlockHeight: 0,
+		TxHash:      "",
+	}
 
 	return result, nil
 }
