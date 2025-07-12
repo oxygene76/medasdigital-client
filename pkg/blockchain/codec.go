@@ -133,18 +133,11 @@ func (c *Codec) ValidateAddress(addr string) error {
 }
 
 // RegisterInterfaces registers the interfaces for protobuf
-// Simplified RegisterInterfaces function for codec.go
-
-// RegisterInterfaces registers the interfaces for protobuf - SIMPLIFIED VERSION
+/
+// RegisterInterfaces registers the interfaces for protobuf
 func RegisterInterfaces(registry types.InterfaceRegistry) {
-	// Register all message types in one call with different interfaces
-	registry.RegisterImplementations(
-		(*sdk.Msg)(nil),
-		&MsgRegisterClient{},
-		&MsgUpdateClient{},
-		&MsgDeactivateClient{},
-		&MsgStoreAnalysis{},
-	)
+	// Temporarily disabled to fix TypeURL conflict
+	// TODO: Implement proper proto message definitions with unique TypeURLs
 }
 
 // Alternative: Comment out the entire RegisterInterfaces function temporarily
