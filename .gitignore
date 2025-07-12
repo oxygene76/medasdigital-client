@@ -1,28 +1,25 @@
-# Binaries
-bin/
+tignore sollte enthalten:
+/bin/
+/build/
+/dist/
 *.exe
 *.dll
 *.so
 *.dylib
 
-# Go
-*.test
-*.out
-vendor/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Config
-config.yaml
-*.key
+# Config files (user-specific)
+# .medasdigital-client/
+# config.yaml
+#
+# # IDE files
+# .vscode/
+# .idea/
+# *.swp
+# *.swo
+#
+# # OS files
+# .DS_Store
+# Thumbs.db
 /bin/
 /build/
 .medasdigital-client/
