@@ -22,6 +22,7 @@ type Codec struct {
 	interfaceRegistry types.InterfaceRegistry
 	addressCodec      AddressCodec
 	config            CodecConfig
+	txConfig          client.TxConfig  // ← NEU HINZUFÜGEN
 }
 
 // CodecConfig configuration for codec
@@ -41,11 +42,13 @@ func NewCodec() *Codec {
 	}
 	
 	marshaler := codec.NewProtoCodec(globalInterfaceRegistry)
+	txConfig := tx.NewTxConfig(marshaler, tx.DefaultSignModes)  // ← NEU
 	
 	return &Codec{
 		marshaler:         marshaler,
 		interfaceRegistry: globalInterfaceRegistry,
 		addressCodec:      NewBech32AddressCodec("medas"),
+		txConfig:          txConfig,  // ← NEU
 		config: CodecConfig{
 			Bech32Prefix:   "medas",
 			UseProtobuf:    true,
@@ -239,6 +242,16 @@ func (c *Codec) MustUnmarshalBinary(data []byte, obj interface{}) {
 	if err := c.UnmarshalBinary(data, obj); err != nil {
 		panic(err)
 	}
+}
+
+// GetTxConfig returns the TxConfig for transaction building
+func (c *Codec) GetTxConfig() client.TxConfig {
+	return tx.NewTxConfig(c.marshaler, tx.DefaultSignModes)
+}
+
+// GetCodec returns the underlying codec
+func (c *Codec) GetCodec() codec.Codec {
+	return c.marshaler
 }
 
 // Global codec instance
