@@ -13,6 +13,8 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
@@ -1056,8 +1058,24 @@ func getInterfaceRegistry() types.InterfaceRegistry {
 	
 	interfaceRegistry := types.NewInterfaceRegistry()
 	
-	// Only register once
+	// Register standard Cosmos SDK interfaces
 	std.RegisterInterfaces(interfaceRegistry)
+	
+	// ✅ WICHTIG: Register Account interfaces für v0.50.10
+	authtypes.RegisterInterfaces(interfaceRegistry)
+	
+	// ✅ NEU: Register bank interfaces
+	banktypes.RegisterInterfaces(interfaceRegistry)
+	
+	// ✅ NEU: Register base account implementations
+	interfaceRegistry.RegisterImplementations(
+		(*authtypes.AccountI)(nil),
+		&authtypes.BaseAccount{},
+		&authtypes.ModuleAccount{},
+	)
+	
+	// ✅ Register our blockchain messages
+	blockchain.RegisterInterfaces(interfaceRegistry)
 	
 	return interfaceRegistry
 }
