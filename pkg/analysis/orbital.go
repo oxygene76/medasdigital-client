@@ -450,20 +450,24 @@ func (m *Manager) AIDetection(modelPath, surveyImages string, gpuAccel bool) (*t
 	log.Printf("Starting AI detection with model: %s", modelPath)
 	start := time.Now()
 
-	// Placeholder implementation
 	result := &types.AnalysisResult{
-		ID:        fmt.Sprintf("ai_detection_%d", time.Now().Unix()),
-		Type:      "ai_detection",
-		Status:    "completed",
-		Results:   map[string]interface{}{"message": "AI detection placeholder"},
-		Timestamp: time.Now(),
-		Duration:  time.Since(start),
-		Metadata: types.AnalysisMetadata{
-			InputFiles: []string{surveyImages},
-			GPUUsed:    gpuAccel,
-			Version:    "1.0.0",
-		},
-	}
+	AnalysisType: "ai_detection",
+	Data: map[string]interface{}{
+		"id":      fmt.Sprintf("ai_detection_%d", time.Now().Unix()),
+		"type":    "ai_detection",
+		"status":  "completed",
+		"message": "AI detection placeholder",
+	},
+	Metadata: map[string]string{
+		"input_files": surveyImages,
+		"gpu_used":    fmt.Sprintf("%t", gpuAccel),
+		"version":     "1.0.0",
+	},
+	Timestamp:   time.Now(),
+	ClientID:    "",
+	BlockHeight: 0,
+	TxHash:      "",
+}
 
 	return result, nil
 }
@@ -473,25 +477,27 @@ func (m *Manager) TrainDeepDetector(trainingData, architecture string, gpuDevice
 	log.Printf("Starting deep detector training with architecture: %s", architecture)
 	start := time.Now()
 
-	// Placeholder implementation
 	result := &types.AnalysisResult{
-		ID:        fmt.Sprintf("training_%d", time.Now().Unix()),
-		Type:      "ai_training",
-		Status:    "completed",
-		Results:   map[string]interface{}{"message": "Deep detector training placeholder"},
-		Timestamp: time.Now(),
-		Duration:  time.Since(start),
-		Metadata: types.AnalysisMetadata{
-			InputFiles: []string{trainingData},
-			GPUUsed:    len(gpuDevices) > 0,
-			GPUDevices: gpuDevices,
-			Parameters: map[string]interface{}{
-				"architecture": architecture,
-				"batch_size":   batchSize,
-				"epochs":       epochs,
-			},
-			Version: "1.0.0",
-		},
+	AnalysisType: "ai_training",
+	Data: map[string]interface{}{
+		"id":      fmt.Sprintf("training_%d", time.Now().Unix()),
+		"type":    "ai_training",
+		"status":  "completed",
+		"message": "Deep detector training placeholder",
+	},
+	Metadata: map[string]string{
+		"input_files":  trainingData,
+		"gpu_used":     fmt.Sprintf("%t", len(gpuDevices) > 0),
+		"gpu_devices":  fmt.Sprintf("%v", gpuDevices),
+		"architecture": architecture,
+		"batch_size":   fmt.Sprintf("%d", batchSize),
+		"epochs":       fmt.Sprintf("%d", epochs),
+		"version":      "1.0.0",
+	},
+	Timestamp:   time.Now(),
+	ClientID:    "",
+	BlockHeight: 0,
+	TxHash:      "",
 	}
 
 	return result, nil
@@ -502,18 +508,22 @@ func (m *Manager) TrainAnomalyDetector() (*types.AnalysisResult, error) {
 	log.Println("Starting anomaly detector training")
 	start := time.Now()
 
-	// Placeholder implementation
 	result := &types.AnalysisResult{
-		ID:        fmt.Sprintf("anomaly_training_%d", time.Now().Unix()),
-		Type:      "anomaly_training",
-		Status:    "completed",
-		Results:   map[string]interface{}{"message": "Anomaly detector training placeholder"},
-		Timestamp: time.Now(),
-		Duration:  time.Since(start),
-		Metadata: types.AnalysisMetadata{
-			Version: "1.0.0",
-		},
-	}
+	AnalysisType: "anomaly_training",
+	Data: map[string]interface{}{
+		"id":      fmt.Sprintf("anomaly_training_%d", time.Now().Unix()),
+		"type":    "anomaly_training", 
+		"status":  "completed",
+		"message": "Anomaly detector training placeholder",
+	},
+	Metadata: map[string]string{
+		"version": "1.0.0",
+	},
+	Timestamp:   time.Now(),
+	ClientID:    "",
+	BlockHeight: 0,
+	TxHash:      "",
+}
 
 	return result, nil
 }
