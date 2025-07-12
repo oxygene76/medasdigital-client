@@ -134,13 +134,29 @@ func (c *Codec) ValidateAddress(addr string) error {
 
 // RegisterInterfaces registers the interfaces for protobuf
 func RegisterInterfaces(registry types.InterfaceRegistry) {
-	registry.RegisterImplementations(
-		(*sdk.Msg)(nil),
-		&MsgRegisterClient{},
-		&MsgStoreAnalysis{},
-		&MsgUpdateClient{},
-		&MsgDeactivateClient{},
-	)
+    // Ersetzen Sie den gesamten Inhalt mit:
+    
+    // Client registry messages
+    registry.RegisterImplementations(
+        (*sdk.Msg)(nil),
+        &MsgRegisterClient{},
+    )
+    
+    registry.RegisterImplementations(
+        (*sdk.Msg)(nil),
+        &MsgUpdateClient{},
+    )
+    
+    registry.RegisterImplementations(
+        (*sdk.Msg)(nil),
+        &MsgDeactivateClient{},
+    )
+    
+    // Analysis messages  
+    registry.RegisterImplementations(
+        (*sdk.Msg)(nil),
+        &MsgStoreAnalysis{},
+    )
 }
 
 // RegisterLegacyAminoCodec registers the legacy amino codec
