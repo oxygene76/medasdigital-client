@@ -88,6 +88,7 @@ func (cb *ClientBuilder) BuildClient() (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create keyring: %w", err)
 	}
+}
 
 	// Create client context - simplified for v0.50
 	clientCtx := client.Context{}.
