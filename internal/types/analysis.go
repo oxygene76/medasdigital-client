@@ -36,6 +36,14 @@ type OrbitalDynamicsResult struct {
 	Targets         []ObservationTarget `json:"observation_targets"`
 	Confidence      float64             `json:"confidence"`
 	ModelVersion    string              `json:"model_version"`
+        // Felder die orbital.go braucht:
+	Objects                []TNOObject     `json:"objects"`
+	Planet9Probability     float64         `json:"planet9_probability"`
+	ClusteringSignificance float64         `json:"clustering_significance"`
+	GravitationalEffects   []GravEffect    `json:"gravitational_effects"`
+	Recommendations        []Recommendation `json:"recommendations"`
+        
+
 }
 
 // PhotometricResult represents photometric analysis results
