@@ -11,7 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"strconv"
+	"net/http"
+	"io"
 
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -19,6 +24,8 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 )
+
+
 
 // Enhanced Client Registration Data for Chat System
 type ChatClientRegistration struct {
@@ -73,6 +80,33 @@ type RegistrationConfig struct {
 // Registration manager
 type RegistrationManager struct {
 	config *RegistrationConfig
+}
+
+type BlockchainRegistrationData struct {
+	TransactionHash    string                 `json:"transaction_hash"`
+	BlockHeight        int64                  `json:"block_height"`
+	BlockTime          time.Time              `json:"block_time"`
+	FromAddress        string                 `json:"from_address"`
+	ToAddress          string                 `json:"to_address"`
+	Amount             string                 `json:"amount"`
+	Denom              string                 `json:"denom"`
+	Fee                string                 `json:"fee"`
+	GasUsed            int64                  `json:"gas_used"`
+	GasWanted          int64                  `json:"gas_wanted"`
+	Memo               string                 `json:"memo"`
+	RegistrationData   ClientRegistrationData `json:"registration_data"`
+	ClientID           string                 `json:"client_id"`
+	VerificationStatus string                 `json:"verification_status"`
+	TxStatus           string                 `json:"tx_status"`
+}
+
+type TxData struct {
+	FromAddress string
+	ToAddress   string
+	Amount      string
+	Denom       string
+	Fee         string
+	Memo        string
 }
 
 // NewRegistrationManager creates a new registration manager
@@ -438,4 +472,193 @@ func RegisterChatClient(clientCtx client.Context, registration *ChatClientRegist
 	
 	rm := NewRegistrationManager(baseDenom)
 	return rm.RegisterChatClient(clientCtx, registration)
+}
+// GetLocalRegistrationHashes retrieves local registration transaction hashes
+func GetLocalRegistrationHashes() ([]string, error) {
+	homeDir, _ := os.UserHomeDir()
+	indexPath := filepath.Join(homeDir, ".medasdigital-client", "registrations", "index.json")
+	
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("no local registrations found")
+	}
+	
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read index file: %w", err)
+	}
+	
+	var registrations []RegistrationResult
+	if err := json.Unmarshal(data, &registrations); err != nil {
+		return nil, fmt.Errorf("failed to parse index file: %w", err)
+	}
+	
+	var hashes []string
+	for _, reg := range registrations {
+		if reg.TransactionHash != "" {
+			hashes = append(hashes, reg.TransactionHash)
+		}
+	}
+	
+	return hashes, nil
+}
+
+// FetchRegistrationFromBlockchain fetches complete registration data from blockchain
+func FetchRegistrationFromBlockchain(txHash string, rpcEndpoint, chainID string, codec codec.Codec) (*BlockchainRegistrationData, error) {
+	// Create RPC client
+	rpcClient, err := client.NewClientFromNode(rpcEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC client: %w", err)
+	}
+	
+	// Query transaction
+	hashBytes, err := hex.DecodeString(txHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid transaction hash: %w", err)
+	}
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	
+	// Get transaction details
+	txResult, err := rpcClient.Tx(ctx, hashBytes, false)
+	if err != nil {
+		return nil, fmt.Errorf("transaction not found: %w", err)
+	}
+	
+	// Get block details for timestamp
+	block, err := rpcClient.Block(ctx, &txResult.Height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block: %w", err)
+	}
+	
+	// Parse transaction to extract registration data
+	regData := &BlockchainRegistrationData{
+		TransactionHash: txHash,
+		BlockHeight:     txResult.Height,
+		BlockTime:       block.Block.Time,
+		GasUsed:         txResult.TxResult.GasUsed,
+		GasWanted:       txResult.TxResult.GasWanted,
+		TxStatus:        GetTxStatus(txResult.TxResult.Code),
+	}
+	
+	// Decode transaction to get actual data
+	if txData, err := DecodeTxData(txResult.Tx, codec); err == nil {
+		regData.FromAddress = txData.FromAddress
+		regData.ToAddress = txData.ToAddress
+		regData.Amount = txData.Amount
+		regData.Denom = txData.Denom
+		regData.Fee = txData.Fee
+		regData.Memo = txData.Memo
+		
+		// Parse memo for registration data
+		if regData.Memo != "" {
+			// Try to extract JSON from memo (remove prefix if present)
+			memoContent := regData.Memo
+			if strings.Contains(memoContent, "MEDAS_CLIENT_REG:") {
+				memoContent = strings.Replace(memoContent, "MEDAS_CLIENT_REG:", "", 1)
+			}
+			if strings.Contains(memoContent, "MEDAS_CHAT_REG:") {
+				memoContent = strings.Replace(memoContent, "MEDAS_CHAT_REG:", "", 1)
+			}
+			
+			var clientRegData ClientRegistrationData
+			if err := json.Unmarshal([]byte(memoContent), &clientRegData); err == nil {
+				regData.RegistrationData = clientRegData
+				regData.ClientID = GenerateClientIDFromHash(txHash)
+				regData.VerificationStatus = "✅ Valid"
+			} else {
+				regData.VerificationStatus = "⚠️  Invalid memo format"
+			}
+		}
+	}
+	
+	return regData, nil
+}
+
+// DecodeTxData decodes transaction data (simplified for MsgSend)
+func DecodeTxData(txBytes []byte, codec codec.Codec) (*TxData, error) {
+	// Create TxConfig from codec
+	txConfig := authtx.NewTxConfig(codec, authtx.DefaultSignModes)
+	
+	// Use TxConfig to decode transaction
+	tx, err := txConfig.TxDecoder()(txBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode transaction: %w", err)
+	}
+	
+	txData := &TxData{}
+	
+	// Try to cast to TxWithMemo interface to get memo
+	if txWithMemo, ok := tx.(interface{ GetMemo() string }); ok {
+		txData.Memo = txWithMemo.GetMemo()
+	}
+	
+	// Try to cast to FeeTx interface to get fee
+	if feeTx, ok := tx.(interface{ GetFee() sdk.Coins }); ok {
+		fee := feeTx.GetFee()
+		if len(fee) > 0 {
+			txData.Fee = fee[0].Amount.String()
+			txData.Denom = fee[0].Denom
+		}
+	}
+	
+	// Extract message data
+	msgs := tx.GetMsgs()
+	if len(msgs) > 0 {
+		// Try to cast to MsgSend
+		for _, msg := range msgs {
+			if msgSend, ok := msg.(*banktypes.MsgSend); ok {
+				txData.FromAddress = msgSend.FromAddress
+				txData.ToAddress = msgSend.ToAddress
+				if len(msgSend.Amount) > 0 {
+					txData.Amount = msgSend.Amount[0].Amount.String()
+					if txData.Denom == "" {
+						txData.Denom = msgSend.Amount[0].Denom
+					}
+				}
+				break
+			}
+		}
+	}
+	
+	return txData, nil
+}
+
+// GetTxStatus returns transaction status string
+func GetTxStatus(code uint32) string {
+	if code == 0 {
+		return "✅ Success"
+	}
+	return fmt.Sprintf("❌ Failed (Code: %d)", code)
+}
+
+// GenerateClientIDFromHash creates a client ID from transaction hash (public version)
+func GenerateClientIDFromHash(txHash string) string {
+	hash := sha256.Sum256([]byte(txHash))
+	shortHash := hex.EncodeToString(hash[:4])
+	return fmt.Sprintf("client-%s", shortHash)
+}
+
+// RegisterInterfaces registers the concrete message types with the interface registry
+func RegisterInterfaces(registry types.InterfaceRegistry) {
+	// Register auth interfaces
+	authtypes.RegisterInterfaces(registry)
+	
+	// Register bank interfaces  
+	banktypes.RegisterInterfaces(registry)
+	
+	// Register account implementations
+	registry.RegisterImplementations(
+		(*authtypes.AccountI)(nil),
+		&authtypes.BaseAccount{},
+		&authtypes.ModuleAccount{},
+	)
+}
+
+// TruncateString helper function
+func TruncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
