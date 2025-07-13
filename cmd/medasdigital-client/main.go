@@ -205,7 +205,7 @@ var statusCmd = &cobra.Command{
 		
 		// Get registration hashes from local storage
 		localHashes, err := blockchain.GetLocalRegistrationHashes()
-		var blockchainRegistration *BlockchainRegistrationData
+		var blockchainRegistration *blockchain.BlockchainRegistrationData
 		var isRegistered bool
 		
 		if err == nil && len(localHashes) > 0 {
@@ -1398,7 +1398,7 @@ var listRegistrationsCmd = &cobra.Command{
 		fmt.Printf("📋 Found %d local registration hash(es), fetching from blockchain...\n", len(hashes))
 		fmt.Println("=" + strings.Repeat("=", 80))
 		
-		var validRegistrations []*BlockchainRegistrationData
+		var validRegistrations []*blockchain.BlockchainRegistrationData
 		
 		for i, hash := range hashes {
 			fmt.Printf("\n%d. 📊 Transaction Hash: %s\n", i+1, hash)
@@ -1443,7 +1443,7 @@ var whoamiCmd = &cobra.Command{
 		}
 		
 		cfg := loadConfig()
-		var latest *BlockchainRegistrationData
+		var latest *blockchain.BlockchainRegistrationData
 		
 		// Find most recent valid registration from blockchain
 		for _, hash := range hashes {
