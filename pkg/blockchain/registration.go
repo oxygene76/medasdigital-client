@@ -107,6 +107,40 @@ type TxData struct {
 	Memo        string
 }
 
+// Parse registrations
+	var registrations []RegistrationResult
+	if err := json.Unmarshal(data, &registrations); err != nil {
+		return nil, fmt.Errorf("failed to parse registration index: %w", err)
+	}
+	
+	// Search for address in registrations
+	for _, reg := range registrations {
+		// Check ClientRegistrationData
+		if clientReg, ok := reg.RegistrationData.(ClientRegistrationData); ok {
+			if clientReg.ClientAddress == address {
+				return &reg, nil
+			}
+		}
+		
+		// Check ChatClientRegistration
+		if chatReg, ok := reg.RegistrationData.(*ChatClientRegistration); ok {
+			if chatReg.ClientAddress == address {
+				return &reg, nil
+			}
+		}
+		
+		// Handle interface{} case by checking JSON structure
+		if regDataMap, ok := reg.RegistrationData.(map[string]interface{}); ok {
+			if clientAddr, exists := regDataMap["client_address"]; exists {
+				if clientAddr.(string) == address {
+					return &reg, nil
+				}
+			}
+		}
+	}
+	
+	return nil, fmt.Errorf("no registration found for address %s", address)
+}
 
 
 // NewRegistrationManager creates a new registration manager
@@ -125,6 +159,19 @@ func NewRegistrationManager(baseDenom string) *RegistrationManager {
 func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fromAddress string, capabilities []string, metadata string, gas uint64) (*RegistrationResult, error) {
 	fmt.Println("📝 Performing simple client registration...")
 	
+	// Check if address is already registered
+	if existingReg, err := rm.CheckExistingRegistration(fromAddress); err == nil {
+		fmt.Printf("⚠️  Address %s is already registered!\n", fromAddress)
+		
+		// Ask user what to do
+		proceed, err := rm.PromptUserForReregistration(existingReg, "simple")
+		if err != nil || !proceed {
+			return nil, err
+		}
+		
+		fmt.Println("🔄 Proceeding with re-registration...")
+	}
+	
 	// Create legacy registration data
 	regData := ClientRegistrationData{
 		ClientAddress: fromAddress,
@@ -141,6 +188,19 @@ func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fr
 // RegisterChatClient performs enhanced registration with chat capabilities
 func (rm *RegistrationManager) RegisterChatClient(clientCtx client.Context, registration *ChatClientRegistration) (*RegistrationResult, error) {
 	fmt.Println("💬 Performing enhanced chat client registration...")
+	
+	// Check if address is already registered
+	if existingReg, err := rm.CheckExistingRegistration(registration.ClientAddress); err == nil {
+		fmt.Printf("⚠️  Address %s is already registered!\n", registration.ClientAddress)
+		
+		// Ask user what to do
+		proceed, err := rm.PromptUserForReregistration(existingReg, "chat")
+		if err != nil || !proceed {
+			return nil, err
+		}
+		
+		fmt.Println("🔄 Proceeding with chat re-registration...")
+	}
 	
 	// Validate chat registration
 	if err := rm.validateChatRegistration(registration); err != nil {
@@ -166,7 +226,6 @@ func (rm *RegistrationManager) RegisterChatClient(clientCtx client.Context, regi
 	// Use internal registration function
 	return rm.performRegistration(clientCtx, registration.ClientAddress, registration, rm.config.GasLimit, "chat")
 }
-
 // ERSETZEN Sie die komplette performRegistration Funktion in pkg/blockchain/registration.go:
 
 // performRegistration handles the actual blockchain transaction
@@ -658,6 +717,80 @@ func (rm *RegistrationManager) getLocalRegistrationByAddress(address string) (*R
 		return nil, fmt.Errorf("failed to read registration index: %w", err)
 	}
 
+
+// PromptUserForReregistration asks user what to do if already registered
+func (rm *RegistrationManager) PromptUserForReregistration(existingReg *RegistrationResult, regType string) (bool, error) {
+	fmt.Printf("\n⚠️  EXISTING REGISTRATION FOUND\n")
+	fmt.Printf("🆔 Client ID: %s\n", existingReg.ClientID)
+	fmt.Printf("📝 Transaction: %s\n", existingReg.TransactionHash)
+	fmt.Printf("🕒 Registered: %s\n", existingReg.RegisteredAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("📊 Type: %s\n", existingReg.RegistrationType)
+	
+	// Show existing registration details
+	if clientReg, ok := existingReg.RegistrationData.(ClientRegistrationData); ok {
+		fmt.Printf("🔧 Current Capabilities: %v\n", clientReg.Capabilities)
+	} else if chatReg, ok := existingReg.RegistrationData.(*ChatClientRegistration); ok {
+		fmt.Printf("📛 Display Name: %s\n", chatReg.DisplayName)
+		fmt.Printf("🏛️  Institution: %s\n", chatReg.Institution)
+		fmt.Printf("🔧 Current Capabilities: %v\n", chatReg.Capabilities)
+	}
+	
+	fmt.Printf("\n🤔 What would you like to do?\n")
+	fmt.Printf("   [1] Continue with new registration (will overwrite)\n")
+	fmt.Printf("   [2] Cancel registration\n")
+	fmt.Printf("   [3] Show existing registration details\n")
+	fmt.Printf("\nChoice (1-3): ")
+	
+	var choice string
+	fmt.Scanln(&choice)
+	
+	switch choice {
+	case "1":
+		fmt.Printf("✅ Proceeding with new %s registration...\n", regType)
+		return true, nil
+	case "2":
+		fmt.Printf("❌ Registration cancelled by user\n")
+		return false, fmt.Errorf("registration cancelled by user")
+	case "3":
+		rm.displayExistingRegistration(existingReg)
+		// Ask again after showing details
+		return rm.PromptUserForReregistration(existingReg, regType)
+	default:
+		fmt.Printf("❌ Invalid choice. Registration cancelled.\n")
+		return false, fmt.Errorf("invalid choice")
+	}
+}
+
+// displayExistingRegistration shows detailed info about existing registration
+func (rm *RegistrationManager) displayExistingRegistration(reg *RegistrationResult) {
+	fmt.Printf("\n📋 EXISTING REGISTRATION DETAILS\n")
+	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
+	fmt.Printf("🆔 Client ID: %s\n", reg.ClientID)
+	fmt.Printf("📝 Transaction Hash: %s\n", reg.TransactionHash)
+	fmt.Printf("🏔️  Block Height: %d\n", reg.BlockHeight)
+	fmt.Printf("🕒 Registered: %s\n", reg.RegisteredAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("📊 Registration Type: %s\n", reg.RegistrationType)
+	
+	// Show type-specific details
+	if clientReg, ok := reg.RegistrationData.(ClientRegistrationData); ok {
+		fmt.Printf("📍 Address: %s\n", clientReg.ClientAddress)
+		fmt.Printf("🔧 Capabilities: %v\n", clientReg.Capabilities)
+		if clientReg.Metadata != "" {
+			fmt.Printf("📋 Metadata: %s\n", clientReg.Metadata)
+		}
+	} else if chatReg, ok := reg.RegistrationData.(*ChatClientRegistration); ok {
+		fmt.Printf("📍 Address: %s\n", chatReg.ClientAddress)
+		fmt.Printf("📛 Display Name: %s\n", chatReg.DisplayName)
+		fmt.Printf("🏛️  Institution: %s\n", chatReg.Institution)
+		fmt.Printf("🌍 Country: %s\n", chatReg.Country)
+		fmt.Printf("🔬 Expertise: %v\n", chatReg.Expertise)
+		fmt.Printf("📊 Type: %s\n", chatReg.RegistrationType)
+		fmt.Printf("🔧 Capabilities: %v\n", chatReg.Capabilities)
+	}
+	
+	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
+}
+	
 // TruncateString helper function
 func TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
