@@ -1,8 +1,6 @@
 // pkg/blockchain/registration.go - Enhanced Client Registration
 package blockchain
 
-package blockchain
-
 import (
 	"context"
 	"crypto/sha256"
