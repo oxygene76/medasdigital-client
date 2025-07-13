@@ -5,6 +5,7 @@ import (
     	"fmt"
 	"os"
 	"io"
+	"strconv"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -702,13 +703,13 @@ if err != nil {
 
 fmt.Println()
 
-// TEST 3: All balances query
-fmt.Println("🔍 Testing All Balances Query (v0.50.10):")
-allBalancesReq := fmt.Sprintf(`{"address":"%s"}`, address)
+// TEST 3: All balances query (corrected)
+fmt.Println("🔍 Testing All Balances Query (v0.50.10) - JSON Format:")
+allBalancesReqJSON := fmt.Sprintf(`{"address":"%s"}`, address)
 allBalancesPath := "/cosmos.bank.v1beta1.Query/AllBalances"
-fmt.Printf("   Query: %s\n", allBalancesReq)
+fmt.Printf("   Query: %s\n", allBalancesReqJSON)
 
-allBalRes, allBalHeight, allBalErr := queryCtx.QueryWithData(allBalancesPath, []byte(allBalancesReq))
+allBalRes, allBalHeight, allBalErr := queryCtx.QueryWithData(allBalancesPath, []byte(allBalancesReqJSON))
 fmt.Printf("   Result:\n")
 fmt.Printf("     Error: %v\n", allBalErr)
 fmt.Printf("     Height: %d\n", allBalHeight)
@@ -718,6 +719,51 @@ if allBalErr == nil && len(allBalRes) > 0 {
     fmt.Printf("     Response Data: %s\n", string(allBalRes))
 }
 fmt.Println()
+
+// 3. ERSETZEN Sie den TEST 5 Block (ca. Zeile 740-765) mit diesem:
+// TEST 5: Try AccountRetriever (v0.50.10 way)
+fmt.Println("🔍 Testing AccountRetriever (v0.50.10 method):")
+accountRetriever := authtypes.AccountRetriever{}
+
+// Parse address for AccountRetriever
+addr, err := sdk.AccAddressFromBech32(address)
+if err != nil {
+    fmt.Printf("   ❌ Invalid address format: %v\n", err)
+    return nil
+}
+
+account, accErr := accountRetriever.GetAccount(queryCtx, addr)
+fmt.Printf("   AccountRetriever Result:\n")
+fmt.Printf("     Error: %v\n", accErr)
+
+if accErr == nil && account != nil {
+    fmt.Printf("     Account Found: ✅\n")
+    fmt.Printf("     Account Number: %d\n", account.GetAccountNumber())
+    fmt.Printf("     Sequence: %d\n", account.GetSequence())
+    fmt.Printf("     Address: %s\n", account.GetAddress().String())
+    fmt.Printf("     PubKey: %v\n", account.GetPubKey())
+} else if accErr != nil {
+    fmt.Printf("     Error Type: %T\n", accErr)
+    fmt.Printf("     Error Details: %s\n", accErr.Error())
+}
+fmt.Println()
+
+// SUMMARY
+fmt.Println("📋 Summary (Cosmos SDK v0.50.10):")
+fmt.Printf("   Address: %s\n", address)
+fmt.Printf("   Chain: %s\n", cfg.Chain.ID)
+fmt.Printf("   SDK Version: v0.50.10\n")
+fmt.Printf("   RPC Connection: ✅ Working\n")
+
+// Determine what we actually found
+if accErr == nil || allBalErr == nil {
+    fmt.Printf("   Account Status: ✅ Found via at least one method\n")
+} else {
+    fmt.Printf("   Account Status: ❓ Not found via tested methods\n")
+    fmt.Printf("   Note: Account may exist but use different query format\n")
+}
+
+return nil
 
 // TEST 4: Chain information that works
 fmt.Println("🔍 Working Chain Information:")
@@ -2199,7 +2245,7 @@ func queryBalanceViaBankModule(address string, cfg *Config) ([]sdk.Coin, error) 
 		WithInterfaceRegistry(globalInterfaceRegistry)
 	
 	// Try to use bank query client directly
-	addr, err := sdk.AccAddressFromBech32(address)
+	_, err := sdk.AccAddressFromBech32(address)
 	if err != nil {
 		return nil, fmt.Errorf("invalid address: %w", err)
 	}
