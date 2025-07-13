@@ -165,26 +165,15 @@ func (rm *RegistrationManager) RegisterChatClient(clientCtx client.Context, regi
 	return rm.performRegistration(clientCtx, registration.ClientAddress, registration, rm.config.GasLimit, "chat")
 }
 
+// ERSETZEN Sie die komplette performRegistration Funktion in pkg/blockchain/registration.go:
+
 // performRegistration handles the actual blockchain transaction
 func (rm *RegistrationManager) performRegistration(clientCtx client.Context, fromAddress string, regData interface{}, gas uint64, regType string) (*RegistrationResult, error) {
-	// Convert registration data to JSON for memo
-	memoBytes, err := json.Marshal(regData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal registration data: %w", err)
-	}
+	// Create minimal memo for blockchain (max 256 chars limit)
+	timestamp := time.Now().Unix()
+	memo := fmt.Sprintf("MEDAS_%s_REG:%d", strings.ToUpper(regType), timestamp)
 	
-	// Add type prefix to memo
-	var memoPrefix string
-	switch regType {
-	case "chat":
-		memoPrefix = "MEDAS_CHAT_REG:"
-	default:
-		memoPrefix = "MEDAS_CLIENT_REG:"
-	}
-	
-	memo := memoPrefix + string(memoBytes)
-	
-	fmt.Printf("📋 Registration memo: %s... (%d bytes)\n", memo[:50], len(memo))
+	fmt.Printf("📋 Minimal memo: %s (%d bytes)\n", memo, len(memo))
 	
 	// Parse address
 	fromAddr, err := sdk.AccAddressFromBech32(fromAddress)
@@ -192,7 +181,7 @@ func (rm *RegistrationManager) performRegistration(clientCtx client.Context, fro
 		return nil, fmt.Errorf("invalid from address: %w", err)
 	}
 	
-	// Create self-send transaction with registration data in memo
+	// Create self-send transaction with minimal memo
 	amount := sdk.NewCoins(sdk.NewCoin(rm.config.BaseDenom, sdkmath.NewInt(rm.config.RegistrationFee)))
 	msgSend := banktypes.NewMsgSend(fromAddr, fromAddr, amount)
 	
@@ -202,7 +191,7 @@ func (rm *RegistrationManager) performRegistration(clientCtx client.Context, fro
 		return nil, fmt.Errorf("failed to set messages: %w", err)
 	}
 	
-	// Set memo
+	// Set minimal memo
 	txBuilder.SetMemo(memo)
 	
 	// Set gas
@@ -272,17 +261,17 @@ func (rm *RegistrationManager) performRegistration(clientCtx client.Context, fro
 	// Generate client ID
 	clientID := rm.generateClientID(result.TxHash)
 	
-	// Create registration result
+	// Create registration result with FULL data (stored locally only)
 	regResult := &RegistrationResult{
 		TransactionHash:  result.TxHash,
 		ClientID:         clientID,
-		RegistrationData: regData,
+		RegistrationData: regData, // Full registration data stored locally
 		BlockHeight:      result.Height,
 		RegisteredAt:     time.Now(),
 		RegistrationType: regType,
 	}
 	
-	// Save registration locally
+	// Save complete registration locally (no size limit)
 	if err := rm.saveRegistrationResult(regResult); err != nil {
 		fmt.Printf("⚠️  Warning: Failed to save registration locally: %v\n", err)
 	}
@@ -290,10 +279,10 @@ func (rm *RegistrationManager) performRegistration(clientCtx client.Context, fro
 	fmt.Println("✅ Registration transaction successful!")
 	fmt.Printf("📝 Transaction Hash: %s\n", result.TxHash)
 	fmt.Printf("🆔 Client ID: %s\n", clientID)
+	fmt.Printf("💾 Full registration data saved locally\n")
 	
 	return regResult, nil
 }
-
 // validateChatRegistration validates chat registration data
 func (rm *RegistrationManager) validateChatRegistration(reg *ChatClientRegistration) error {
 	if reg.ClientAddress == "" {
