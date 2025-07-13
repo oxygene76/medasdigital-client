@@ -90,7 +90,6 @@ func init() {
 	}
 }
 
-// runSimpleRegistration performs basic client registration
 func runSimpleRegistration(cmd *cobra.Command, args []string) error {
 	fmt.Println("📝 Starting Simple Client Registration")
 	fmt.Println("═══════════════════════════════════════")
@@ -98,7 +97,7 @@ func runSimpleRegistration(cmd *cobra.Command, args []string) error {
 	// Get flags
 	from, _ := cmd.Flags().GetString("from")
 	keyringBackend, _ := cmd.Flags().GetString("keyring-backend")
-	gas, _ := cmd.Flags().GetUint64("gas")
+	// ENTFERNT: gas, _ := cmd.Flags().GetUint64("gas")
 	capabilities, _ := cmd.Flags().GetStringSlice("capabilities")
 	metadata, _ := cmd.Flags().GetString("metadata")
 	
@@ -155,23 +154,19 @@ func runSimpleRegistration(cmd *cobra.Command, args []string) error {
 	// Setup full client context for transaction
 	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
 	if err != nil {
-    		return fmt.Errorf("failed to create RPC client: %w", err)
+		return fmt.Errorf("failed to create RPC client: %w", err)
 	}
 
 	txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
 	fullClientCtx := clientCtx.
-    	WithFromName(from).
-    	WithFromAddress(Addr).
-    	WithTxConfig(txConfig).
-    	WithClient(rpcClient).
-    	WithChainID(cfg.Chain.ID).
-    	WithCodec(globalCodec).
-    	WithInterfaceRegistry(globalInterfaceRegistry).
-    	WithBroadcastMode(flags.BroadcastSync)
-	
-	if err != nil {
-		return fmt.Errorf("failed to setup client context: %w", err)
-	}
+		WithFromName(from).
+		WithFromAddress(addr).
+		WithTxConfig(txConfig).
+		WithClient(rpcClient).
+		WithChainID(cfg.Chain.ID).
+		WithCodec(globalCodec).
+		WithInterfaceRegistry(globalInterfaceRegistry).
+		WithBroadcastMode(flags.BroadcastSync)
 	
 	// Perform simple registration using new package
 	result, err := blockchain.RegisterClientSimple(fullClientCtx, addr.String(), capabilities, metadata, 0)
@@ -185,7 +180,6 @@ func runSimpleRegistration(cmd *cobra.Command, args []string) error {
 	return displayRegistrationSuccess(result, cfg.Chain.ID)
 }
 
-// runChatRegistration performs enhanced chat registration
 func runChatRegistration(cmd *cobra.Command, args []string) error {
 	fmt.Println("💬 Starting Enhanced Chat Registration")
 	fmt.Println("═════════════════════════════════════")
@@ -193,7 +187,7 @@ func runChatRegistration(cmd *cobra.Command, args []string) error {
 	// Get flags
 	from, _ := cmd.Flags().GetString("from")
 	keyringBackend, _ := cmd.Flags().GetString("keyring-backend")
-	gas, _ := cmd.Flags().GetUint64("gas")
+	// ENTFERNT: gas, _ := cmd.Flags().GetUint64("gas")
 	capabilities, _ := cmd.Flags().GetStringSlice("capabilities")
 	
 	// Chat-specific flags
@@ -260,28 +254,22 @@ func runChatRegistration(cmd *cobra.Command, args []string) error {
 	fmt.Println("✅ Blockchain connection successful!")
 	
 	// Setup full client context for transaction
-	
-	
 	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
 	if err != nil {
-    		return fmt.Errorf("failed to create RPC client: %w", err)
+		return fmt.Errorf("failed to create RPC client: %w", err)
 	}
 
 	txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
 	fullClientCtx := clientCtx.
-    	WithFromName(from).
-    	WithFromAddress(from).
-    	WithTxConfig(txConfig).
-    	WithClient(rpcClient).
-    	WithChainID(cfg.Chain.ID).
-    	WithCodec(globalCodec).
-    	WithInterfaceRegistry(globalInterfaceRegistry).
-    	WithBroadcastMode(flags.BroadcastSync)
+		WithFromName(from).
+		WithFromAddress(addr).
+		WithTxConfig(txConfig).
+		WithClient(rpcClient).
+		WithChainID(cfg.Chain.ID).
+		WithCodec(globalCodec).
+		WithInterfaceRegistry(globalInterfaceRegistry).
+		WithBroadcastMode(flags.BroadcastSync)
 
-	if err != nil {
-		return fmt.Errorf("failed to setup client context: %w", err)
-	}
-	
 	// Create enhanced registration data
 	registration := &blockchain.ChatClientRegistration{
 		ClientAddress:    addr.String(),
@@ -307,7 +295,7 @@ func runChatRegistration(cmd *cobra.Command, args []string) error {
 	// Display success with chat-specific information
 	return displayChatRegistrationSuccess(result, cfg.Chain.ID)
 }
-
+	
 // displayRegistrationSuccess shows registration success information
 func displayRegistrationSuccess(result *blockchain.RegistrationResult, chainID string) error {
 	fmt.Println("\n🎉 CLIENT SUCCESSFULLY REGISTERED ON BLOCKCHAIN!")
