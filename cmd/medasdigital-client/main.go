@@ -602,30 +602,188 @@ if authErr == nil && len(authRes) > 0 {
 }
 fmt.Println()
 
-// TEST 2: Bank balance query (v0.50.10)
-fmt.Println("🔍 Testing Bank Balance Query (v0.50.10):")
+// Balance Information
+fmt.Println("💰 Balance Information:")
 
-// Try different denom names that might be used
-denoms := []string{"stake", "token", "medas", "umedas", "atom", "uatom"}
-
-for _, denom := range denoms {
-    balanceQueryReq := fmt.Sprintf(`{"address":"%s","denom":"%s"}`, address, denom)
-    balanceQueryPath := "/cosmos.bank.v1beta1.Query/Balance"
+// Method 1: Transaction search for balance hints
+query := fmt.Sprintf("transfer.recipient='%s' OR transfer.sender='%s'", address, address)
+txSearchResult, err := rpcClient.TxSearch(context.Background(), query, false, nil, nil, "desc")
+if err != nil {
+    fmt.Printf("   ❌ Could not search transactions: %v\n", err)
+} else {
+    fmt.Printf("   📊 Found %d transactions involving this address\n", len(txSearchResult.Txs))
     
-    fmt.Printf("   Testing denom '%s':\n", denom)
-    fmt.Printf("     Query: %s\n", balanceQueryReq)
-    
-    balRes, balHeight, balErr := queryCtx.QueryWithData(balanceQueryPath, []byte(balanceQueryReq))
-    fmt.Printf("     Result: ")
-    if balErr != nil {
-        fmt.Printf("Error - %v\n", balErr)
-    } else {
-        fmt.Printf("Success - %d bytes, height %d\n", len(balRes), balHeight)
-        if len(balRes) > 0 && len(balRes) < 1000 {
-            fmt.Printf("     Data: %s\n", string(balRes))
+    if len(txSearchResult.Txs) > 0 {
+        lastTx := txSearchResult.Txs[0]
+        fmt.Printf("   🔄 Last transaction: Block %d, Hash: %s\n", lastTx.Height, lastTx.Hash.String()[:16]+"...")
+        
+        // Look for balance-related events
+        for _, event := range lastTx.TxResult.Events {
+            if event.Type == "transfer" {
+                for _, attr := range event.Attributes {
+                    if attr.Key == "amount" {
+                        fmt.Printf("   💸 Last transfer amount: %s\n", attr.Value)
+                    }
+                }
+            }
         }
     }
 }
+
+// Method 2: Account activity analysis
+if account != nil {
+    fmt.Printf("   🔢 Account sequence: %d (indicates %d transactions sent)\n", 
+        account.GetSequence(), account.GetSequence())
+    
+    if account.GetSequence() > 0 {
+        fmt.Printf("   💡 Account has been active (sent %d transactions)\n", account.GetSequence())
+        fmt.Printf("   💡 To check exact balance, use: ./bin/medasdigital-client balance %s\n", address)
+    } else {
+        fmt.Printf("   💡 Account exists but has not sent any transactions yet\n")
+    }
+}
+fmt.Println()
+
+// SUMMARY (existing code continues here...)
+fmt.Println("📋 Summary (Cosmos SDK v0.50.10):")
+
+
+// TEST 2: Bank balance query (v0.50.10) - IMPROVED VERSION
+fmt.Println("🔍 Testing Bank Balance Query (v0.50.10):")
+
+// Method A: Protobuf-encoded query (correct format)
+denoms := []string{"umedas", "medas", "stake"}
+for _, denom := range denoms {
+    fmt.Printf("   Testing denom '%s':\n", denom)
+    
+    // Create proper protobuf query
+    balanceReq := &banktypes.QueryBalanceRequest{
+        Address: address,
+        Denom:   denom,
+    }
+    
+    reqBytes, err := queryCtx.Codec.Marshal(balanceReq)
+    if err != nil {
+        fmt.Printf("     ❌ Failed to marshal request: %v\n", err)
+        continue
+    }
+    
+    fmt.Printf("     Query: Protobuf-encoded (%d bytes)\n", len(reqBytes))
+    
+    balRes, balHeight, balErr := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/Balance", reqBytes)
+    if balErr != nil {
+        fmt.Printf("     Result: ❌ Error - %v\n", balErr)
+    } else {
+        fmt.Printf("     Result: ✅ Success - %d bytes, height %d\n", len(balRes), balHeight)
+        
+        // Decode the response
+        var balanceResp banktypes.QueryBalanceResponse
+        if err := queryCtx.Codec.Unmarshal(balRes, &balanceResp); err != nil {
+            fmt.Printf("     ❌ Failed to decode response: %v\n", err)
+        } else {
+            if balanceResp.Balance != nil && !balanceResp.Balance.Amount.IsZero() {
+                fmt.Printf("     💰 BALANCE FOUND: %s %s\n", balanceResp.Balance.Amount, balanceResp.Balance.Denom)
+            } else {
+                fmt.Printf("     💰 Balance: 0 %s\n", denom)
+            }
+        }
+    }
+}
+
+// Method B: All Balances Query (Protobuf)
+fmt.Printf("\n   Testing All Balances Query:\n")
+allBalancesReq := &banktypes.QueryAllBalancesRequest{
+    Address: address,
+}
+
+reqBytes, err := queryCtx.Codec.Marshal(allBalancesReq)
+if err != nil {
+    fmt.Printf("     ❌ Failed to marshal all balances request: %v\n", err)
+} else {
+    allBalRes, allBalHeight, allBalErr := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/AllBalances", reqBytes)
+    if allBalErr != nil {
+        fmt.Printf("     Result: ❌ Error - %v\n", allBalErr)
+    } else {
+        fmt.Printf("     Result: ✅ Success - %d bytes, height %d\n", len(allBalRes), allBalHeight)
+        
+        var allBalancesResp banktypes.QueryAllBalancesResponse
+        if err := queryCtx.Codec.Unmarshal(allBalRes, &allBalancesResp); err != nil {
+            fmt.Printf("     ❌ Failed to decode response: %v\n", err)
+        } else {
+            if len(allBalancesResp.Balances) > 0 {
+                fmt.Printf("     💰 TOTAL BALANCES FOUND:\n")
+                for _, balance := range allBalancesResp.Balances {
+                    fmt.Printf("       %s %s\n", balance.Amount, balance.Denom)
+                }
+            } else {
+                fmt.Printf("     💰 No balances found (empty account)\n")
+            }
+        }
+    }
+}
+
+// Method C: Transaction-based balance estimation
+fmt.Printf("\n   Transaction-based balance analysis:\n")
+query := fmt.Sprintf("transfer.recipient='%s' OR transfer.sender='%s'", address, address)
+txSearchResult, err := rpcClient.TxSearch(context.Background(), query, false, nil, nil, "desc")
+if err != nil {
+    fmt.Printf("     ❌ Could not search transactions: %v\n", err)
+} else {
+    fmt.Printf("     📊 Found %d transactions involving this address\n", len(txSearchResult.Txs))
+    
+    if len(txSearchResult.Txs) > 0 {
+        // Look at recent transactions for balance hints
+        var totalReceived, totalSent int64
+        
+        for i, tx := range txSearchResult.Txs[:min(10, len(txSearchResult.Txs))] {
+            if i < 3 { // Show first 3 transactions
+                fmt.Printf("     %d. Block %d: Status %d\n", i+1, tx.Height, tx.TxResult.Code)
+            }
+            
+            // Analyze events for amounts
+            for _, event := range tx.TxResult.Events {
+                if event.Type == "transfer" {
+                    var isReceiver, isSender bool
+                    var amount string
+                    
+                    for _, attr := range event.Attributes {
+                        if attr.Key == "recipient" && attr.Value == address {
+                            isReceiver = true
+                        }
+                        if attr.Key == "sender" && attr.Value == address {
+                            isSender = true
+                        }
+                        if attr.Key == "amount" {
+                            amount = attr.Value
+                        }
+                    }
+                    
+                    if amount != "" && strings.Contains(amount, "umedas") {
+                        // Extract numeric amount
+                        amountStr := strings.Replace(amount, "umedas", "", -1)
+                        if amountVal, err := strconv.ParseInt(amountStr, 10, 64); err == nil {
+                            if isReceiver {
+                                totalReceived += amountVal
+                            }
+                            if isSender {
+                                totalSent += amountVal
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if totalReceived > 0 || totalSent > 0 {
+            fmt.Printf("     💸 Transaction analysis (last 10 txs):\n")
+            fmt.Printf("       Received: %d umedas\n", totalReceived)
+            fmt.Printf("       Sent: %d umedas\n", totalSent)
+            fmt.Printf("       Net: %d umedas\n", totalReceived-totalSent)
+            fmt.Printf("     💡 Note: This is not exact balance, just transaction history\n")
+        }
+    }
+}
+
 fmt.Println()
 
 // TEST 3: All balances query
