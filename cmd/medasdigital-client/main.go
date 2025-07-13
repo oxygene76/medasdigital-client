@@ -4,6 +4,7 @@ import (
 	"context"
     	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 	"strings"
@@ -881,6 +882,8 @@ func init() {
 	
 	
 	// Add subcommands
+	rootCmd.AddCommand(listRegistrationsCmd)
+	rootCmd.AddCommand(whoamiCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(registerCmd)
 	rootCmd.AddCommand(statusCmd)
@@ -1762,7 +1765,7 @@ func getDetailedChainStatus(rpcEndpoint string) (*ChainStatus, error) {
 	}, nil
 }
 
-/ Enhanced list registrations command with blockchain data
+// Enhanced list registrations command with blockchain data
 var listRegistrationsCmd = &cobra.Command{
 	Use:   "list-registrations",
 	Short: "List all registrations with blockchain verification",
@@ -1864,6 +1867,27 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// Test GPU availability
+func testGPUAvailability() (bool, string) {
+	cmd := exec.Command("nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits")
+	output, err := cmd.Output()
+	if err != nil {
+		return false, "nvidia-smi not available"
+	}
+	
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) > 0 && lines[0] != "" {
+		parts := strings.Split(lines[0], ",")
+		if len(parts) >= 2 {
+			name := strings.TrimSpace(parts[0])
+			memory := strings.TrimSpace(parts[1])
+			return true, fmt.Sprintf("%s (%s MB)", name, memory)
+		}
+	}
+	
+	return false, "No NVIDIA GPUs detected"
 }
 
 func main() {
