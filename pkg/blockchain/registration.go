@@ -22,8 +22,6 @@ import (
 	sdkmath "cosmossdk.io/math"
 )
 
-
-
 // Enhanced Client Registration Data for Chat System
 type ChatClientRegistration struct {
 	// Core client data
@@ -107,7 +105,47 @@ type TxData struct {
 	Memo        string
 }
 
-// Parse registrations
+// NewRegistrationManager creates a new registration manager
+func NewRegistrationManager(baseDenom string) *RegistrationManager {
+	return &RegistrationManager{
+		config: &RegistrationConfig{
+			BaseDenom:       baseDenom,
+			RegistrationFee: 1, // 1 base unit (minimal for self-send)
+			GasLimit:        200000,
+			DefaultCapabilities: []string{"orbital_dynamics", "photometric_analysis"},
+		},
+	}
+}
+
+// CheckExistingRegistration checks if address is already registered
+func (rm *RegistrationManager) CheckExistingRegistration(address string) (*RegistrationResult, error) {
+	// First check local registrations
+	if localReg, err := rm.getLocalRegistrationByAddress(address); err == nil {
+		return localReg, nil
+	}
+	
+	// If not found locally, could implement blockchain search here
+	// For now, return nil (not found)
+	return nil, nil
+}
+
+// getLocalRegistrationByAddress searches local registrations for address
+func (rm *RegistrationManager) getLocalRegistrationByAddress(address string) (*RegistrationResult, error) {
+	homeDir, _ := os.UserHomeDir()
+	indexPath := filepath.Join(homeDir, ".medasdigital-client", "registrations", "index.json")
+	
+	// Check if index file exists
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("no local registrations found")
+	}
+	
+	// Read index file
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read registration index: %w", err)
+	}
+	
+	// Parse registrations
 	var registrations []RegistrationResult
 	if err := json.Unmarshal(data, &registrations); err != nil {
 		return nil, fmt.Errorf("failed to parse registration index: %w", err)
@@ -142,17 +180,77 @@ type TxData struct {
 	return nil, fmt.Errorf("no registration found for address %s", address)
 }
 
-
-// NewRegistrationManager creates a new registration manager
-func NewRegistrationManager(baseDenom string) *RegistrationManager {
-	return &RegistrationManager{
-		config: &RegistrationConfig{
-			BaseDenom:       baseDenom,
-			RegistrationFee: 1, // 1 base unit (minimal for self-send)
-			GasLimit:        200000,
-			DefaultCapabilities: []string{"orbital_dynamics", "photometric_analysis"},
-		},
+// PromptUserForReregistration asks user what to do if already registered
+func (rm *RegistrationManager) PromptUserForReregistration(existingReg *RegistrationResult, regType string) (bool, error) {
+	fmt.Printf("\n⚠️  EXISTING REGISTRATION FOUND\n")
+	fmt.Printf("🆔 Client ID: %s\n", existingReg.ClientID)
+	fmt.Printf("📝 Transaction: %s\n", existingReg.TransactionHash)
+	fmt.Printf("🕒 Registered: %s\n", existingReg.RegisteredAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("📊 Type: %s\n", existingReg.RegistrationType)
+	
+	// Show existing registration details
+	if clientReg, ok := existingReg.RegistrationData.(ClientRegistrationData); ok {
+		fmt.Printf("🔧 Current Capabilities: %v\n", clientReg.Capabilities)
+	} else if chatReg, ok := existingReg.RegistrationData.(*ChatClientRegistration); ok {
+		fmt.Printf("📛 Display Name: %s\n", chatReg.DisplayName)
+		fmt.Printf("🏛️  Institution: %s\n", chatReg.Institution)
+		fmt.Printf("🔧 Current Capabilities: %v\n", chatReg.Capabilities)
 	}
+	
+	fmt.Printf("\n🤔 What would you like to do?\n")
+	fmt.Printf("   [1] Continue with new registration (will overwrite)\n")
+	fmt.Printf("   [2] Cancel registration\n")
+	fmt.Printf("   [3] Show existing registration details\n")
+	fmt.Printf("\nChoice (1-3): ")
+	
+	var choice string
+	fmt.Scanln(&choice)
+	
+	switch choice {
+	case "1":
+		fmt.Printf("✅ Proceeding with new %s registration...\n", regType)
+		return true, nil
+	case "2":
+		fmt.Printf("❌ Registration cancelled by user\n")
+		return false, fmt.Errorf("registration cancelled by user")
+	case "3":
+		rm.displayExistingRegistration(existingReg)
+		// Ask again after showing details
+		return rm.PromptUserForReregistration(existingReg, regType)
+	default:
+		fmt.Printf("❌ Invalid choice. Registration cancelled.\n")
+		return false, fmt.Errorf("invalid choice")
+	}
+}
+
+// displayExistingRegistration shows detailed info about existing registration
+func (rm *RegistrationManager) displayExistingRegistration(reg *RegistrationResult) {
+	fmt.Printf("\n📋 EXISTING REGISTRATION DETAILS\n")
+	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
+	fmt.Printf("🆔 Client ID: %s\n", reg.ClientID)
+	fmt.Printf("📝 Transaction Hash: %s\n", reg.TransactionHash)
+	fmt.Printf("🏔️  Block Height: %d\n", reg.BlockHeight)
+	fmt.Printf("🕒 Registered: %s\n", reg.RegisteredAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("📊 Registration Type: %s\n", reg.RegistrationType)
+	
+	// Show type-specific details
+	if clientReg, ok := reg.RegistrationData.(ClientRegistrationData); ok {
+		fmt.Printf("📍 Address: %s\n", clientReg.ClientAddress)
+		fmt.Printf("🔧 Capabilities: %v\n", clientReg.Capabilities)
+		if clientReg.Metadata != "" {
+			fmt.Printf("📋 Metadata: %s\n", clientReg.Metadata)
+		}
+	} else if chatReg, ok := reg.RegistrationData.(*ChatClientRegistration); ok {
+		fmt.Printf("📍 Address: %s\n", chatReg.ClientAddress)
+		fmt.Printf("📛 Display Name: %s\n", chatReg.DisplayName)
+		fmt.Printf("🏛️  Institution: %s\n", chatReg.Institution)
+		fmt.Printf("🌍 Country: %s\n", chatReg.Country)
+		fmt.Printf("🔬 Expertise: %v\n", chatReg.Expertise)
+		fmt.Printf("📊 Type: %s\n", chatReg.RegistrationType)
+		fmt.Printf("🔧 Capabilities: %v\n", chatReg.Capabilities)
+	}
+	
+	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
 }
 
 // RegisterClientSimple performs basic client registration (legacy compatibility)
@@ -226,7 +324,6 @@ func (rm *RegistrationManager) RegisterChatClient(clientCtx client.Context, regi
 	// Use internal registration function
 	return rm.performRegistration(clientCtx, registration.ClientAddress, registration, rm.config.GasLimit, "chat")
 }
-// ERSETZEN Sie die komplette performRegistration Funktion in pkg/blockchain/registration.go:
 
 // performRegistration handles the actual blockchain transaction
 func (rm *RegistrationManager) performRegistration(clientCtx client.Context, fromAddress string, regData interface{}, gas uint64, regType string) (*RegistrationResult, error) {
@@ -344,6 +441,7 @@ func (rm *RegistrationManager) performRegistration(clientCtx client.Context, fro
 	
 	return regResult, nil
 }
+
 // validateChatRegistration validates chat registration data
 func (rm *RegistrationManager) validateChatRegistration(reg *ChatClientRegistration) error {
 	if reg.ClientAddress == "" {
@@ -521,6 +619,7 @@ func RegisterChatClient(clientCtx client.Context, registration *ChatClientRegist
 	rm := NewRegistrationManager(baseDenom)
 	return rm.RegisterChatClient(clientCtx, registration)
 }
+
 // GetLocalRegistrationHashes retrieves local registration transaction hashes
 func GetLocalRegistrationHashes() ([]string, error) {
 	homeDir, _ := os.UserHomeDir()
@@ -549,8 +648,6 @@ func GetLocalRegistrationHashes() ([]string, error) {
 	
 	return hashes, nil
 }
-
-/// ERSETZEN Sie die FetchRegistrationFromBlockchain Funktion in registration.go:
 
 // FetchRegistrationFromBlockchain fetches complete registration data from blockchain
 func FetchRegistrationFromBlockchain(txHash string, rpcEndpoint, chainID string, codec codec.Codec) (*BlockchainRegistrationData, error) {
@@ -689,108 +786,6 @@ func GenerateClientIDFromHash(txHash string) string {
 	return fmt.Sprintf("client-%s", shortHash)
 }
 
-/ CheckExistingRegistration checks if address is already registered
-func (rm *RegistrationManager) CheckExistingRegistration(address string) (*RegistrationResult, error) {
-	// First check local registrations
-	if localReg, err := rm.getLocalRegistrationByAddress(address); err == nil {
-		return localReg, nil
-	}
-	
-	// If not found locally, could implement blockchain search here
-	// For now, return nil (not found)
-	return nil, nil
-}
-
-// getLocalRegistrationByAddress searches local registrations for address
-func (rm *RegistrationManager) getLocalRegistrationByAddress(address string) (*RegistrationResult, error) {
-	homeDir, _ := os.UserHomeDir()
-	indexPath := filepath.Join(homeDir, ".medasdigital-client", "registrations", "index.json")
-	
-	// Check if index file exists
-	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("no local registrations found")
-	}
-	
-	// Read index file
-	data, err := os.ReadFile(indexPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read registration index: %w", err)
-	}
-
-
-// PromptUserForReregistration asks user what to do if already registered
-func (rm *RegistrationManager) PromptUserForReregistration(existingReg *RegistrationResult, regType string) (bool, error) {
-	fmt.Printf("\n⚠️  EXISTING REGISTRATION FOUND\n")
-	fmt.Printf("🆔 Client ID: %s\n", existingReg.ClientID)
-	fmt.Printf("📝 Transaction: %s\n", existingReg.TransactionHash)
-	fmt.Printf("🕒 Registered: %s\n", existingReg.RegisteredAt.Format("2006-01-02 15:04:05"))
-	fmt.Printf("📊 Type: %s\n", existingReg.RegistrationType)
-	
-	// Show existing registration details
-	if clientReg, ok := existingReg.RegistrationData.(ClientRegistrationData); ok {
-		fmt.Printf("🔧 Current Capabilities: %v\n", clientReg.Capabilities)
-	} else if chatReg, ok := existingReg.RegistrationData.(*ChatClientRegistration); ok {
-		fmt.Printf("📛 Display Name: %s\n", chatReg.DisplayName)
-		fmt.Printf("🏛️  Institution: %s\n", chatReg.Institution)
-		fmt.Printf("🔧 Current Capabilities: %v\n", chatReg.Capabilities)
-	}
-	
-	fmt.Printf("\n🤔 What would you like to do?\n")
-	fmt.Printf("   [1] Continue with new registration (will overwrite)\n")
-	fmt.Printf("   [2] Cancel registration\n")
-	fmt.Printf("   [3] Show existing registration details\n")
-	fmt.Printf("\nChoice (1-3): ")
-	
-	var choice string
-	fmt.Scanln(&choice)
-	
-	switch choice {
-	case "1":
-		fmt.Printf("✅ Proceeding with new %s registration...\n", regType)
-		return true, nil
-	case "2":
-		fmt.Printf("❌ Registration cancelled by user\n")
-		return false, fmt.Errorf("registration cancelled by user")
-	case "3":
-		rm.displayExistingRegistration(existingReg)
-		// Ask again after showing details
-		return rm.PromptUserForReregistration(existingReg, regType)
-	default:
-		fmt.Printf("❌ Invalid choice. Registration cancelled.\n")
-		return false, fmt.Errorf("invalid choice")
-	}
-}
-
-// displayExistingRegistration shows detailed info about existing registration
-func (rm *RegistrationManager) displayExistingRegistration(reg *RegistrationResult) {
-	fmt.Printf("\n📋 EXISTING REGISTRATION DETAILS\n")
-	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
-	fmt.Printf("🆔 Client ID: %s\n", reg.ClientID)
-	fmt.Printf("📝 Transaction Hash: %s\n", reg.TransactionHash)
-	fmt.Printf("🏔️  Block Height: %d\n", reg.BlockHeight)
-	fmt.Printf("🕒 Registered: %s\n", reg.RegisteredAt.Format("2006-01-02 15:04:05"))
-	fmt.Printf("📊 Registration Type: %s\n", reg.RegistrationType)
-	
-	// Show type-specific details
-	if clientReg, ok := reg.RegistrationData.(ClientRegistrationData); ok {
-		fmt.Printf("📍 Address: %s\n", clientReg.ClientAddress)
-		fmt.Printf("🔧 Capabilities: %v\n", clientReg.Capabilities)
-		if clientReg.Metadata != "" {
-			fmt.Printf("📋 Metadata: %s\n", clientReg.Metadata)
-		}
-	} else if chatReg, ok := reg.RegistrationData.(*ChatClientRegistration); ok {
-		fmt.Printf("📍 Address: %s\n", chatReg.ClientAddress)
-		fmt.Printf("📛 Display Name: %s\n", chatReg.DisplayName)
-		fmt.Printf("🏛️  Institution: %s\n", chatReg.Institution)
-		fmt.Printf("🌍 Country: %s\n", chatReg.Country)
-		fmt.Printf("🔬 Expertise: %v\n", chatReg.Expertise)
-		fmt.Printf("📊 Type: %s\n", chatReg.RegistrationType)
-		fmt.Printf("🔧 Capabilities: %v\n", chatReg.Capabilities)
-	}
-	
-	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
-}
-	
 // TruncateString helper function
 func TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
