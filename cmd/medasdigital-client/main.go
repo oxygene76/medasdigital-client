@@ -489,11 +489,12 @@ var statusCmd = &cobra.Command{
 	},
 }
 
+// VOLLSTÄNDIGER ERSATZ für den check-account Command (um alle Probleme zu beheben):
 var checkAccountCmd = &cobra.Command{
 	Use:   "check-account [address]",
 	Short: "Check account status on blockchain",
 	Long:  "Check if an account exists on the blockchain and show its details",
-	Args:  cobra.RangeArgs(0, 1),  // ✅ FIXED: RangeArgs statt MaxArgs
+	Args:  cobra.RangeArgs(0, 1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var address string
 		
@@ -562,266 +563,204 @@ var checkAccountCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("invalid address format: %w", err)
 		}
-		
-		// Try to query account using v0.50.10 methods
 
-// TEST 2: Bank balance query (v0.50.10) - IMPROVED VERSION
-fmt.Println("🔍 Testing Bank Balance Query (v0.50.10):")
+		// TEST 1: Bank balance query (Protobuf method)
+		fmt.Println("🔍 Testing Bank Balance Query (v0.50.10):")
+		denoms := []string{"umedas", "medas", "stake"}
+		for _, denom := range denoms {
+			fmt.Printf("   Testing denom '%s':\n", denom)
+			
+			// Create proper protobuf query
+			balanceReq := &banktypes.QueryBalanceRequest{
+				Address: address,
+				Denom:   denom,
+			}
+			
+			reqBytes, err := queryCtx.Codec.Marshal(balanceReq)
+			if err != nil {
+				fmt.Printf("     ❌ Failed to marshal request: %v\n", err)
+				continue
+			}
+			
+			fmt.Printf("     Query: Protobuf-encoded (%d bytes)\n", len(reqBytes))
+			
+			balRes, balHeight, balErr := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/Balance", reqBytes)
+			if balErr != nil {
+				fmt.Printf("     Result: ❌ Error - %v\n", balErr)
+			} else {
+				fmt.Printf("     Result: ✅ Success - %d bytes, height %d\n", len(balRes), balHeight)
+				
+				// Decode the response
+				var balanceResp banktypes.QueryBalanceResponse
+				if err := queryCtx.Codec.Unmarshal(balRes, &balanceResp); err != nil {
+					fmt.Printf("     ❌ Failed to decode response: %v\n", err)
+				} else {
+					if balanceResp.Balance != nil && !balanceResp.Balance.Amount.IsZero() {
+						fmt.Printf("     💰 BALANCE FOUND: %s %s\n", balanceResp.Balance.Amount, balanceResp.Balance.Denom)
+					} else {
+						fmt.Printf("     💰 Balance: 0 %s\n", denom)
+					}
+				}
+			}
+		}
 
-// Method A: Protobuf-encoded query (correct format)
-denoms := []string{"umedas", "medas", "stake"}
-for _, denom := range denoms {
-    fmt.Printf("   Testing denom '%s':\n", denom)
-    
-    // Create proper protobuf query
-    balanceReq := &banktypes.QueryBalanceRequest{
-        Address: address,
-        Denom:   denom,
-    }
-    
-    reqBytes, err := queryCtx.Codec.Marshal(balanceReq)
-    if err != nil {
-        fmt.Printf("     ❌ Failed to marshal request: %v\n", err)
-        continue
-    }
-    
-    fmt.Printf("     Query: Protobuf-encoded (%d bytes)\n", len(reqBytes))
-    
-    balRes, balHeight, balErr := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/Balance", reqBytes)
-    if balErr != nil {
-        fmt.Printf("     Result: ❌ Error - %v\n", balErr)
-    } else {
-        fmt.Printf("     Result: ✅ Success - %d bytes, height %d\n", len(balRes), balHeight)
-        
-        // Decode the response
-        var balanceResp banktypes.QueryBalanceResponse
-        if err := queryCtx.Codec.Unmarshal(balRes, &balanceResp); err != nil {
-            fmt.Printf("     ❌ Failed to decode response: %v\n", err)
-        } else {
-            if balanceResp.Balance != nil && !balanceResp.Balance.Amount.IsZero() {
-                fmt.Printf("     💰 BALANCE FOUND: %s %s\n", balanceResp.Balance.Amount, balanceResp.Balance.Denom)
-            } else {
-                fmt.Printf("     💰 Balance: 0 %s\n", denom)
-            }
-        }
-    }
-}
+		// TEST 2: All Balances Query (Protobuf) - FIXED VARIABLES
+		fmt.Printf("\n   Testing All Balances Query:\n")
+		allBalancesReq := &banktypes.QueryAllBalancesRequest{
+			Address: address,
+		}
 
-// Method B: All Balances Query (Protobuf)
-fmt.Printf("\n   Testing All Balances Query:\n")
-allBalancesReq := &banktypes.QueryAllBalancesRequest{
-    Address: address,
-}
+		var allReqBytes []byte
+		allReqBytes, err = queryCtx.Codec.Marshal(allBalancesReq)
+		if err != nil {
+			fmt.Printf("     ❌ Failed to marshal all balances request: %v\n", err)
+		} else {
+			allBalRes, allBalHeight, allBalErr := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/AllBalances", allReqBytes)
+			if allBalErr != nil {
+				fmt.Printf("     Result: ❌ Error - %v\n", allBalErr)
+			} else {
+				fmt.Printf("     Result: ✅ Success - %d bytes, height %d\n", len(allBalRes), allBalHeight)
+				
+				var allBalancesResp banktypes.QueryAllBalancesResponse
+				if err := queryCtx.Codec.Unmarshal(allBalRes, &allBalancesResp); err != nil {
+					fmt.Printf("     ❌ Failed to decode response: %v\n", err)
+				} else {
+					if len(allBalancesResp.Balances) > 0 {
+						fmt.Printf("     💰 TOTAL BALANCES FOUND:\n")
+						for _, balance := range allBalancesResp.Balances {
+							fmt.Printf("       %s %s\n", balance.Amount, balance.Denom)
+						}
+					} else {
+						fmt.Printf("     💰 No balances found (empty account)\n")
+					}
+				}
+			}
+		}
 
-reqBytes, err := queryCtx.Codec.Marshal(allBalancesReq)
-if err != nil {
-    fmt.Printf("     ❌ Failed to marshal all balances request: %v\n", err)
-} else {
-    allBalRes, allBalHeight, allBalErr := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/AllBalances", reqBytes)
-    if allBalErr != nil {
-        fmt.Printf("     Result: ❌ Error - %v\n", allBalErr)
-    } else {
-        fmt.Printf("     Result: ✅ Success - %d bytes, height %d\n", len(allBalRes), allBalHeight)
-        
-        var allBalancesResp banktypes.QueryAllBalancesResponse
-        if err := queryCtx.Codec.Unmarshal(allBalRes, &allBalancesResp); err != nil {
-            fmt.Printf("     ❌ Failed to decode response: %v\n", err)
-        } else {
-            if len(allBalancesResp.Balances) > 0 {
-                fmt.Printf("     💰 TOTAL BALANCES FOUND:\n")
-                for _, balance := range allBalancesResp.Balances {
-                    fmt.Printf("       %s %s\n", balance.Amount, balance.Denom)
-                }
-            } else {
-                fmt.Printf("     💰 No balances found (empty account)\n")
-            }
-        }
-    }
-}
+		// TEST 3: Transaction-based balance estimation
+		fmt.Printf("\n   Transaction-based balance analysis:\n")
+		query := fmt.Sprintf("transfer.recipient='%s' OR transfer.sender='%s'", address, address)
+		txSearchResult, err := rpcClient.TxSearch(context.Background(), query, false, nil, nil, "desc")
+		if err != nil {
+			fmt.Printf("     ❌ Could not search transactions: %v\n", err)
+		} else {
+			fmt.Printf("     📊 Found %d transactions involving this address\n", len(txSearchResult.Txs))
+			
+			if len(txSearchResult.Txs) > 0 {
+				// Look at recent transactions for balance hints
+				var totalReceived, totalSent int64
+				
+				for i, tx := range txSearchResult.Txs[:min(10, len(txSearchResult.Txs))] {
+					if i < 3 { // Show first 3 transactions
+						fmt.Printf("     %d. Block %d: Status %d\n", i+1, tx.Height, tx.TxResult.Code)
+					}
+					
+					// Analyze events for amounts
+					for _, event := range tx.TxResult.Events {
+						if event.Type == "transfer" {
+							var isReceiver, isSender bool
+							var amount string
+							
+							for _, attr := range event.Attributes {
+								if attr.Key == "recipient" && attr.Value == address {
+									isReceiver = true
+								}
+								if attr.Key == "sender" && attr.Value == address {
+									isSender = true
+								}
+								if attr.Key == "amount" {
+									amount = attr.Value
+								}
+							}
+							
+							if amount != "" && strings.Contains(amount, "umedas") {
+								// Extract numeric amount
+								amountStr := strings.Replace(amount, "umedas", "", -1)
+								if amountVal, err := strconv.ParseInt(amountStr, 10, 64); err == nil {
+									if isReceiver {
+										totalReceived += amountVal
+									}
+									if isSender {
+										totalSent += amountVal
+									}
+								}
+							}
+						}
+					}
+				}
+				
+				if totalReceived > 0 || totalSent > 0 {
+					fmt.Printf("     💸 Transaction analysis (last 10 txs):\n")
+					fmt.Printf("       Received: %d umedas\n", totalReceived)
+					fmt.Printf("       Sent: %d umedas\n", totalSent)
+					fmt.Printf("       Net: %d umedas\n", totalReceived-totalSent)
+					fmt.Printf("     💡 Note: This is not exact balance, just transaction history\n")
+				}
+			}
+		}
 
-// Method C: Transaction-based balance estimation
-fmt.Printf("\n   Transaction-based balance analysis:\n")
-query := fmt.Sprintf("transfer.recipient='%s' OR transfer.sender='%s'", address, address)
-txSearchResult, err := rpcClient.TxSearch(context.Background(), query, false, nil, nil, "desc")
-if err != nil {
-    fmt.Printf("     ❌ Could not search transactions: %v\n", err)
-} else {
-    fmt.Printf("     📊 Found %d transactions involving this address\n", len(txSearchResult.Txs))
-    
-    if len(txSearchResult.Txs) > 0 {
-        // Look at recent transactions for balance hints
-        var totalReceived, totalSent int64
-        
-        for i, tx := range txSearchResult.Txs[:min(10, len(txSearchResult.Txs))] {
-            if i < 3 { // Show first 3 transactions
-                fmt.Printf("     %d. Block %d: Status %d\n", i+1, tx.Height, tx.TxResult.Code)
-            }
-            
-            // Analyze events for amounts
-            for _, event := range tx.TxResult.Events {
-                if event.Type == "transfer" {
-                    var isReceiver, isSender bool
-                    var amount string
-                    
-                    for _, attr := range event.Attributes {
-                        if attr.Key == "recipient" && attr.Value == address {
-                            isReceiver = true
-                        }
-                        if attr.Key == "sender" && attr.Value == address {
-                            isSender = true
-                        }
-                        if attr.Key == "amount" {
-                            amount = attr.Value
-                        }
-                    }
-                    
-                    if amount != "" && strings.Contains(amount, "umedas") {
-                        // Extract numeric amount
-                        amountStr := strings.Replace(amount, "umedas", "", -1)
-                        if amountVal, err := strconv.ParseInt(amountStr, 10, 64); err == nil {
-                            if isReceiver {
-                                totalReceived += amountVal
-                            }
-                            if isSender {
-                                totalSent += amountVal
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        if totalReceived > 0 || totalSent > 0 {
-            fmt.Printf("     💸 Transaction analysis (last 10 txs):\n")
-            fmt.Printf("       Received: %d umedas\n", totalReceived)
-            fmt.Printf("       Sent: %d umedas\n", totalSent)
-            fmt.Printf("       Net: %d umedas\n", totalReceived-totalSent)
-            fmt.Printf("     💡 Note: This is not exact balance, just transaction history\n")
-        }
-    }
-}
+		fmt.Println()
 
-fmt.Println()
+		// TEST 4: Chain information that works
+		fmt.Println("🔍 Working Chain Information:")
+		status, err := queryCtx.Client.Status(context.Background())
+		if err != nil {
+			fmt.Printf("   Status Error: %v\n", err)
+		} else {
+			fmt.Printf("   Chain ID: %s\n", status.NodeInfo.Network)
+			fmt.Printf("   Latest Height: %d\n", status.SyncInfo.LatestBlockHeight)
+			fmt.Printf("   Latest Block Time: %s\n", status.SyncInfo.LatestBlockTime)
+			fmt.Printf("   App Version: %s\n", status.NodeInfo.Version)
+			fmt.Printf("   Catching Up: %t\n", status.SyncInfo.CatchingUp)
+		}
+		fmt.Println()
 
-// TEST 3: All balances query (corrected)
-fmt.Println("🔍 Testing All Balances Query (v0.50.10) - JSON Format:")
-allBalancesReqJSON := fmt.Sprintf(`{"address":"%s"}`, address)
-allBalancesPath := "/cosmos.bank.v1beta1.Query/AllBalances"
-fmt.Printf("   Query: %s\n", allBalancesReqJSON)
+		// TEST 5: Try AccountRetriever (v0.50.10 way)
+		fmt.Println("🔍 Testing AccountRetriever (v0.50.10 method):")
+		accountRetriever := authtypes.AccountRetriever{}
 
-var allBalRes []byte
-var allBalHeight int64
-var allBalErr error
-allBalRes, allBalHeight, allBalErr = queryCtx.QueryWithData(allBalancesPath, []byte(allBalancesReqJSON))
+		// Parse address for AccountRetriever
+		addr, err := sdk.AccAddressFromBech32(address)
+		if err != nil {
+			fmt.Printf("   ❌ Invalid address format: %v\n", err)
+			return nil
+		}
 
-fmt.Printf("   Result:\n")
-fmt.Printf("     Error: %v\n", allBalErr)
-fmt.Printf("     Height: %d\n", allBalHeight)
-fmt.Printf("     Response Length: %d bytes\n", len(allBalRes))
+		account, accErr := accountRetriever.GetAccount(queryCtx, addr)
+		fmt.Printf("   AccountRetriever Result:\n")
+		fmt.Printf("     Error: %v\n", accErr)
 
-if allBalErr == nil && len(allBalRes) > 0 {
-    fmt.Printf("     Response Data: %s\n", string(allBalRes))
-}
-fmt.Println()
+		if accErr == nil && account != nil {
+			fmt.Printf("     Account Found: ✅\n")
+			fmt.Printf("     Account Number: %d\n", account.GetAccountNumber())
+			fmt.Printf("     Sequence: %d\n", account.GetSequence())
+			fmt.Printf("     Address: %s\n", account.GetAddress().String())
+			fmt.Printf("     PubKey: %v\n", account.GetPubKey())
+		} else if accErr != nil {
+			fmt.Printf("     Error Type: %T\n", accErr)
+			fmt.Printf("     Error Details: %s\n", accErr.Error())
+		}
+		fmt.Println()
 
-// 3. ERSETZEN Sie den TEST 5 Block (ca. Zeile 740-765) mit diesem:
-// TEST 5: Try AccountRetriever (v0.50.10 way)
-fmt.Println("🔍 Testing AccountRetriever (v0.50.10 method):")
-accountRetriever := authtypes.AccountRetriever{}
+		// SUMMARY
+		fmt.Println("📋 Summary (Cosmos SDK v0.50.10):")
+		fmt.Printf("   Address: %s\n", address)
+		fmt.Printf("   Chain: %s\n", cfg.Chain.ID)
+		fmt.Printf("   SDK Version: v0.50.10\n")
+		fmt.Printf("   RPC Connection: ✅ Working\n")
 
-// Parse address for AccountRetriever
-addr, err := sdk.AccAddressFromBech32(address)
-if err != nil {
-    fmt.Printf("   ❌ Invalid address format: %v\n", err)
-    return nil
-}
+		// Determine what we actually found
+		if accErr == nil {
+			fmt.Printf("   Account Status: ✅ Found via at least one method\n")
+		} else {
+			fmt.Printf("   Account Status: ❓ Not found via tested methods\n")
+			fmt.Printf("   Note: Account may exist but use different query format\n")
+		}
 
-account, accErr := accountRetriever.GetAccount(queryCtx, addr)
-fmt.Printf("   AccountRetriever Result:\n")
-fmt.Printf("     Error: %v\n", accErr)
-
-if accErr == nil && account != nil {
-    fmt.Printf("     Account Found: ✅\n")
-    fmt.Printf("     Account Number: %d\n", account.GetAccountNumber())
-    fmt.Printf("     Sequence: %d\n", account.GetSequence())
-    fmt.Printf("     Address: %s\n", account.GetAddress().String())
-    fmt.Printf("     PubKey: %v\n", account.GetPubKey())
-} else if accErr != nil {
-    fmt.Printf("     Error Type: %T\n", accErr)
-    fmt.Printf("     Error Details: %s\n", accErr.Error())
-}
-fmt.Println()
-
-// SUMMARY
-fmt.Println("📋 Summary (Cosmos SDK v0.50.10):")
-fmt.Printf("   Address: %s\n", address)
-fmt.Printf("   Chain: %s\n", cfg.Chain.ID)
-fmt.Printf("   SDK Version: v0.50.10\n")
-fmt.Printf("   RPC Connection: ✅ Working\n")
-
-// Determine what we actually found
-if accErr == nil || allBalErr == nil {
-    fmt.Printf("   Account Status: ✅ Found via at least one method\n")
-} else {
-    fmt.Printf("   Account Status: ❓ Not found via tested methods\n")
-    fmt.Printf("   Note: Account may exist but use different query format\n")
-}
-
-return nil
-
-// TEST 4: Chain information that works
-fmt.Println("🔍 Working Chain Information:")
-status, err := queryCtx.Client.Status(context.Background())
-if err != nil {
-    fmt.Printf("   Status Error: %v\n", err)
-} else {
-    fmt.Printf("   Chain ID: %s\n", status.NodeInfo.Network)
-    fmt.Printf("   Latest Height: %d\n", status.SyncInfo.LatestBlockHeight)
-    fmt.Printf("   Latest Block Time: %s\n", status.SyncInfo.LatestBlockTime)
-    fmt.Printf("   App Version: %s\n", status.NodeInfo.Version)
-    fmt.Printf("   Catching Up: %t\n", status.SyncInfo.CatchingUp)
-}
-fmt.Println()
-
-// TEST 5: Try AccountRetriever (v0.50.10 way)
-fmt.Println("🔍 Testing AccountRetriever (v0.50.10 method):")
-accountRetriever := authtypes.AccountRetriever{}
-
-account, accErr := accountRetriever.GetAccount(queryCtx, addr)
-fmt.Printf("   AccountRetriever Result:\n")
-fmt.Printf("     Error: %v\n", accErr)
-
-if accErr == nil && account != nil {
-    fmt.Printf("     Account Found: ✅\n")
-    fmt.Printf("     Account Number: %d\n", account.GetAccountNumber())
-    fmt.Printf("     Sequence: %d\n", account.GetSequence())
-    fmt.Printf("     Address: %s\n", account.GetAddress().String())
-    fmt.Printf("     PubKey: %v\n", account.GetPubKey())
-} else if accErr != nil {
-    fmt.Printf("     Error Type: %T\n", accErr)
-    fmt.Printf("     Error Details: %s\n", accErr.Error())
-}
-fmt.Println()
-
-// SUMMARY
-fmt.Println("📋 Summary (Cosmos SDK v0.50.10):")
-fmt.Printf("   Address: %s\n", address)
-fmt.Printf("   Chain: %s\n", cfg.Chain.ID)
-fmt.Printf("   SDK Version: v0.50.10\n")
-fmt.Printf("   RPC Connection: ✅ Working\n")
-
-// Determine what we actually found
-if accErr == nil || allBalErr == nil {
-    fmt.Printf("   Account Status: ✅ Found via at least one method\n")
-} else {
-    fmt.Printf("   Account Status: ❓ Not found via tested methods\n")
-    fmt.Printf("   Note: Account may exist but use different query format\n")
-}
-
-return nil
-		
+		return nil
 	},
 }
+
 
 // analyzeCmd represents the analyze command group
 var analyzeCmd = &cobra.Command{
@@ -2227,7 +2166,7 @@ func queryBalanceViaREST(address string, cfg *Config) (map[string]string, error)
 	return nil, fmt.Errorf("no REST endpoint returned valid balance data")
 }
 
-// Method 3: Bank Module Query
+// 4. FIX für queryBalanceViaBankModule Funktion - KOMPLETT ERSETZEN:
 func queryBalanceViaBankModule(address string, cfg *Config) ([]sdk.Coin, error) {
 	// Create proper client context
 	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
@@ -2249,7 +2188,7 @@ func queryBalanceViaBankModule(address string, cfg *Config) ([]sdk.Coin, error) 
 		WithInterfaceRegistry(globalInterfaceRegistry)
 	
 	// Try to use bank query client directly
-	_, err := sdk.AccAddressFromBech32(address)
+	_, err = sdk.AccAddressFromBech32(address)
 	if err != nil {
 		return nil, fmt.Errorf("invalid address: %w", err)
 	}
@@ -2270,7 +2209,7 @@ func queryBalanceViaBankModule(address string, cfg *Config) ([]sdk.Coin, error) 
 			continue
 		}
 		
-		res, queryHeight, err := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/Balance", reqBytes)
+		res, _, err := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/Balance", reqBytes)
 		if err != nil {
 			fmt.Printf("   Error querying %s: %v\n", denom, err)
 			continue
