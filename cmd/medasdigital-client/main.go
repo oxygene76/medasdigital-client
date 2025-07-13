@@ -1695,6 +1695,10 @@ func fetchRegistrationFromBlockchain(txHash string, cfg *Config) (*BlockchainReg
 	
 	return regData, nil
 }
+
+// ERSETZEN Sie die decodeTxData Funktion mit dieser korrigierten Version:
+
+// Decode transaction data (simplified for MsgSend)
 func decodeTxData(txBytes []byte, cfg *Config) (*TxData, error) {
 	// Create TxConfig using global codec
 	if globalCodec == nil {
@@ -1710,28 +1714,37 @@ func decodeTxData(txBytes []byte, cfg *Config) (*TxData, error) {
 		return nil, fmt.Errorf("failed to decode transaction: %w", err)
 	}
 	
-	txData := &TxData{
-		Memo: tx.GetMemo(),
+	txData := &TxData{}
+	
+	// Try to cast to TxWithMemo interface to get memo
+	if txWithMemo, ok := tx.(interface{ GetMemo() string }); ok {
+		txData.Memo = txWithMemo.GetMemo()
 	}
 	
-	// Extract fee information
-	fee := tx.GetFee()
-	if len(fee) > 0 {
-		txData.Fee = fee[0].Amount.String()
-		txData.Denom = fee[0].Denom
+	// Try to cast to FeeTx interface to get fee
+	if feeTx, ok := tx.(interface{ GetFee() sdk.Coins }); ok {
+		fee := feeTx.GetFee()
+		if len(fee) > 0 {
+			txData.Fee = fee[0].Amount.String()
+			txData.Denom = fee[0].Denom
+		}
 	}
 	
-	// Extract message data (assuming MsgSend)
+	// Extract message data (this should work as GetMsgs() is part of sdk.Tx interface)
 	msgs := tx.GetMsgs()
 	if len(msgs) > 0 {
-		if msgSend, ok := msgs[0].(*banktypes.MsgSend); ok {
-			txData.FromAddress = msgSend.FromAddress
-			txData.ToAddress = msgSend.ToAddress
-			if len(msgSend.Amount) > 0 {
-				txData.Amount = msgSend.Amount[0].Amount.String()
-				if txData.Denom == "" {
-					txData.Denom = msgSend.Amount[0].Denom
+		// Try to cast to MsgSend
+		for _, msg := range msgs {
+			if msgSend, ok := msg.(*banktypes.MsgSend); ok {
+				txData.FromAddress = msgSend.FromAddress
+				txData.ToAddress = msgSend.ToAddress
+				if len(msgSend.Amount) > 0 {
+					txData.Amount = msgSend.Amount[0].Amount.String()
+					if txData.Denom == "" {
+						txData.Denom = msgSend.Amount[0].Denom
+					}
 				}
+				break // We found our MsgSend, we can stop
 			}
 		}
 	}
