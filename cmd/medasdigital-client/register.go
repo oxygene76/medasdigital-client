@@ -153,7 +153,6 @@ func runSimpleRegistration(cmd *cobra.Command, args []string) error {
 	fmt.Println("✅ Blockchain connection successful!")
 	
 	// Setup full client context for transaction
-	cfg := loadConfig()
 	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
 	if err != nil {
     		return fmt.Errorf("failed to create RPC client: %w", err)
@@ -161,8 +160,8 @@ func runSimpleRegistration(cmd *cobra.Command, args []string) error {
 
 	txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
 	fullClientCtx := clientCtx.
-    	WithFromName(fromName).
-    	WithFromAddress(fromAddr).
+    	WithFromName(from).
+    	WithFromAddress(Addr).
     	WithTxConfig(txConfig).
     	WithClient(rpcClient).
     	WithChainID(cfg.Chain.ID).
@@ -175,7 +174,7 @@ func runSimpleRegistration(cmd *cobra.Command, args []string) error {
 	}
 	
 	// Perform simple registration using new package
-	result, err := blockchain.RegisterClientSimple(clientCtx, addr.String(), capabilities, metadata, gas)
+	result, err := blockchain.RegisterClientSimple(fullClientCtx, addr.String(), capabilities, metadata, 0)
 	if err != nil {
 		fmt.Printf("❌ Registration failed: %v\n", err)
 		fmt.Println("💡 Falling back to simulation...")
@@ -263,7 +262,6 @@ func runChatRegistration(cmd *cobra.Command, args []string) error {
 	// Setup full client context for transaction
 	
 	
-	cfg := loadConfig()
 	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
 	if err != nil {
     		return fmt.Errorf("failed to create RPC client: %w", err)
@@ -271,8 +269,8 @@ func runChatRegistration(cmd *cobra.Command, args []string) error {
 
 	txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
 	fullClientCtx := clientCtx.
-    	WithFromName(fromName).
-    	WithFromAddress(fromAddr).
+    	WithFromName(from).
+    	WithFromAddress(from).
     	WithTxConfig(txConfig).
     	WithClient(rpcClient).
     	WithChainID(cfg.Chain.ID).
@@ -299,7 +297,7 @@ func runChatRegistration(cmd *cobra.Command, args []string) error {
 	}
 	
 	// Perform enhanced registration
-	result, err := blockchain.RegisterChatClient(clientCtx, registration)
+	result, err := blockchain.RegisterChatClient(fullClientCtx, registration)
 	if err != nil {
 		fmt.Printf("❌ Chat registration failed: %v\n", err)
 		fmt.Println("💡 Falling back to simulation...")
