@@ -186,7 +186,7 @@ func (rm *RegistrationManager) getLocalRegistrationByAddress(address string, reg
 }
 
 
-/ Enhanced PromptUserForReregistration to show registration type clearly
+// Enhanced PromptUserForReregistration to show registration type clearly
 func (rm *RegistrationManager) PromptUserForReregistration(existingReg *RegistrationResult, regType string) (bool, error) {
 	fmt.Printf("\n⚠️  EXISTING %s REGISTRATION FOUND\n", strings.ToUpper(regType))
 	fmt.Printf("🆔 Client ID: %s\n", existingReg.ClientID)
@@ -294,7 +294,7 @@ func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fr
 }
 
 
-/ UpdateRegisterChatClient to use type-specific check  
+// UpdateRegisterChatClient to use type-specific check  
 func (rm *RegistrationManager) RegisterChatClient(clientCtx client.Context, registration *ChatClientRegistration) (*RegistrationResult, error) {
 	fmt.Println("💬 Performing enhanced chat client registration...")
 	
