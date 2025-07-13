@@ -153,7 +153,23 @@ func runSimpleRegistration(cmd *cobra.Command, args []string) error {
 	fmt.Println("✅ Blockchain connection successful!")
 	
 	// Setup full client context for transaction
-	clientCtx, err = setupFullClientContext(clientCtx, from, addr, cfg)
+	cfg := loadConfig()
+	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+	if err != nil {
+    		return fmt.Errorf("failed to create RPC client: %w", err)
+	}
+
+	txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
+	fullClientCtx := clientCtx.
+    	WithFromName(fromName).
+    	WithFromAddress(fromAddr).
+    	WithTxConfig(txConfig).
+    	WithClient(rpcClient).
+    	WithChainID(cfg.Chain.ID).
+    	WithCodec(globalCodec).
+    	WithInterfaceRegistry(globalInterfaceRegistry).
+    	WithBroadcastMode(flags.BroadcastSync)
+	
 	if err != nil {
 		return fmt.Errorf("failed to setup client context: %w", err)
 	}
@@ -245,7 +261,25 @@ func runChatRegistration(cmd *cobra.Command, args []string) error {
 	fmt.Println("✅ Blockchain connection successful!")
 	
 	// Setup full client context for transaction
-	clientCtx, err = setupFullClientContext(clientCtx, from, addr, cfg)
+	
+	
+	cfg := loadConfig()
+	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+	if err != nil {
+    		return fmt.Errorf("failed to create RPC client: %w", err)
+	}
+
+	txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
+	fullClientCtx := clientCtx.
+    	WithFromName(fromName).
+    	WithFromAddress(fromAddr).
+    	WithTxConfig(txConfig).
+    	WithClient(rpcClient).
+    	WithChainID(cfg.Chain.ID).
+    	WithCodec(globalCodec).
+    	WithInterfaceRegistry(globalInterfaceRegistry).
+    	WithBroadcastMode(flags.BroadcastSync)
+
 	if err != nil {
 		return fmt.Errorf("failed to setup client context: %w", err)
 	}
