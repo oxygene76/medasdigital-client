@@ -74,6 +74,42 @@ type ClientRegistrationData struct {
 	Version       string    `json:"version"`
 }
 
+// Helper struct for transaction data
+type TxData struct {
+	FromAddress string
+	ToAddress   string
+	Amount      string
+	Denom       string
+	Fee         string
+	Memo        string
+}
+
+type ChainStatus struct {
+	LatestBlockHeight int64
+	LatestBlockTime   time.Time
+	ChainID          string
+	NodeVersion      string
+	CatchingUp       bool
+}
+
+type BlockchainRegistrationData struct {
+	TransactionHash    string                 `json:"transaction_hash"`
+	BlockHeight        int64                  `json:"block_height"`
+	BlockTime          time.Time              `json:"block_time"`
+	FromAddress        string                 `json:"from_address"`
+	ToAddress          string                 `json:"to_address"`
+	Amount             string                 `json:"amount"`
+	Denom              string                 `json:"denom"`
+	Fee                string                 `json:"fee"`
+	GasUsed            int64                  `json:"gas_used"`
+	GasWanted          int64                  `json:"gas_wanted"`
+	Memo               string                 `json:"memo"`
+	RegistrationData   ClientRegistrationData `json:"registration_data"`
+	ClientID           string                 `json:"client_id"`
+	VerificationStatus string                 `json:"verification_status"`
+	TxStatus           string                 `json:"tx_status"`
+}
+
 // Registration Result Storage
 type RegistrationResult struct {
 	TransactionHash  string                 `json:"transaction_hash"`
@@ -352,13 +388,100 @@ return nil
 	},
 }
 
-// statusCmd shows the client status
+// Enhanced status command that fetches from blockchain
 var statusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show client status",
-	Long:  "Display the current status of the MedasDigital client including blockchain connection and GPU status.",
+	Short: "Show client status and configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return globalClient.Status()
+		cfg := loadConfig()
+		
+		fmt.Println("=== MedasDigital Client Status ===")
+		
+		// Get registration hashes from local storage
+		localHashes, err := getLocalRegistrationHashes()
+		var blockchainRegistration *BlockchainRegistrationData
+		var isRegistered bool
+		
+		if err == nil && len(localHashes) > 0 {
+			// Try to fetch the most recent registration from blockchain
+			for _, hash := range localHashes {
+				if regData, err := fetchRegistrationFromBlockchain(hash, cfg); err == nil {
+					if blockchainRegistration == nil || regData.BlockTime.After(blockchainRegistration.BlockTime) {
+						blockchainRegistration = regData
+						isRegistered = true
+					}
+				}
+			}
+		}
+		
+		// Client Registration Status from Blockchain
+		if isRegistered && blockchainRegistration != nil {
+			fmt.Printf("Client ID: %s\n", blockchainRegistration.ClientID)
+			fmt.Printf("Registered: %s ✅\n", blockchainRegistration.BlockTime.Format("2006-01-02 15:04:05"))
+			fmt.Printf("Registration TX: %s\n", blockchainRegistration.TransactionHash)
+			fmt.Printf("Block Height: %d\n", blockchainRegistration.BlockHeight)
+			fmt.Printf("Transaction Status: %s\n", blockchainRegistration.TxStatus)
+			
+			// Show blockchain-verified data
+			fmt.Printf("Verified Address: %s\n", blockchainRegistration.FromAddress)
+			fmt.Printf("Verified Capabilities: %v\n", blockchainRegistration.RegistrationData.Capabilities)
+			fmt.Printf("Gas Used: %d / %d\n", blockchainRegistration.GasUsed, blockchainRegistration.GasWanted)
+			fmt.Printf("Fee Paid: %s %s\n", blockchainRegistration.Fee, blockchainRegistration.Denom)
+			
+			// Show memo data if available
+			if blockchainRegistration.Memo != "" {
+				fmt.Printf("Blockchain Memo: %s\n", truncateString(blockchainRegistration.Memo, 100))
+			}
+			
+			fmt.Printf("Verification: ✅ Confirmed on blockchain\n")
+		} else {
+			fmt.Printf("Client ID: Not registered\n")
+			fmt.Printf("Registered: false ❌\n")
+			
+			// Check if we have local hashes but couldn't fetch from blockchain
+			if len(localHashes) > 0 {
+				fmt.Printf("Note: Found %d local registration(s) but could not verify on blockchain\n", len(localHashes))
+				fmt.Println("💡 This might indicate:")
+				fmt.Println("   • Network connectivity issues")
+				fmt.Println("   • Chain reorganization")
+				fmt.Println("   • Transaction not yet finalized")
+			}
+		}
+		
+		// Available capabilities from config  
+		if cfg.Client.Capabilities != nil {
+			fmt.Printf("Available Capabilities: %v\n", cfg.Client.Capabilities)
+		} else {
+			fmt.Printf("Available Capabilities: [orbital_dynamics photometric_analysis clustering_analysis ai_training]\n")
+		}
+		
+		// Chain information
+		fmt.Printf("Chain ID: %s\n", cfg.Chain.ID)
+		fmt.Printf("RPC Endpoint: %s\n", cfg.Chain.RPCEndpoint)
+		
+		// Test blockchain connection with detailed info
+		fmt.Print("Blockchain Status: ")
+		if status, err := getDetailedChainStatus(cfg.Chain.RPCEndpoint); err != nil {
+			fmt.Printf("❌ Disconnected (%v)\n", err)
+		} else {
+			fmt.Printf("✅ Connected (Block: %d, %s)\n", 
+				status.LatestBlockHeight, 
+				status.LatestBlockTime.Format("15:04:05"))
+		}
+		
+		// GPU Status
+		fmt.Print("GPU Status: ")
+		if cfg.GPU.Enabled {
+			if gpuAvailable, gpuInfo := testGPUAvailability(); gpuAvailable {
+				fmt.Printf("✅ Available (%s)\n", gpuInfo)
+			} else {
+				fmt.Printf("❌ Not Available (%s)\n", gpuInfo)
+			}
+		} else {
+			fmt.Printf("Not Available\n")
+		}
+		
+		return nil
 	},
 }
 
@@ -1477,7 +1600,271 @@ txFactory = txFactory.
 	return regResult, nil
 }
 
+// Get local registration transaction hashes
+func getLocalRegistrationHashes() ([]string, error) {
+	homeDir, _ := os.UserHomeDir()
+	indexPath := filepath.Join(homeDir, ".medasdigital-client", "registrations", "index.json")
+	
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("no local registrations found")
+	}
+	
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read index file: %w", err)
+	}
+	
+	var registrations []RegistrationResult
+	if err := json.Unmarshal(data, &registrations); err != nil {
+		return nil, fmt.Errorf("failed to parse index file: %w", err)
+	}
+	
+	var hashes []string
+	for _, reg := range registrations {
+		if reg.TransactionHash != "" {
+			hashes = append(hashes, reg.TransactionHash)
+		}
+	}
+	
+	return hashes, nil
+}
 
+// Fetch complete registration data from blockchain using transaction hash
+func fetchRegistrationFromBlockchain(txHash string, cfg *Config) (*BlockchainRegistrationData, error) {
+	// Create RPC client
+	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC client: %w", err)
+	}
+	
+	// Query transaction
+	hashBytes, err := hex.DecodeString(txHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid transaction hash: %w", err)
+	}
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	
+	// Get transaction details
+	txResult, err := rpcClient.Tx(ctx, hashBytes, false)
+	if err != nil {
+		return nil, fmt.Errorf("transaction not found: %w", err)
+	}
+	
+	// Get block details for timestamp
+	block, err := rpcClient.Block(ctx, &txResult.Height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block: %w", err)
+	}
+	
+	// Parse transaction to extract registration data
+	regData := &BlockchainRegistrationData{
+		TransactionHash: txHash,
+		BlockHeight:     txResult.Height,
+		BlockTime:       block.Block.Time,
+		GasUsed:         txResult.TxResult.GasUsed,
+		GasWanted:       txResult.TxResult.GasWanted,
+		TxStatus:        getTxStatus(txResult.TxResult.Code),
+	}
+	
+	// Decode transaction to get actual data
+	if txData, err := decodeTxData(txResult.Tx, cfg); err == nil {
+		regData.FromAddress = txData.FromAddress
+		regData.ToAddress = txData.ToAddress
+		regData.Amount = txData.Amount
+		regData.Denom = txData.Denom
+		regData.Fee = txData.Fee
+		regData.Memo = txData.Memo
+		
+		// Parse memo for registration data
+		if regData.Memo != "" {
+			var clientRegData ClientRegistrationData
+			if err := json.Unmarshal([]byte(regData.Memo), &clientRegData); err == nil {
+				regData.RegistrationData = clientRegData
+				regData.ClientID = generateClientID(txHash)
+				regData.VerificationStatus = "✅ Valid"
+			} else {
+				regData.VerificationStatus = "⚠️  Invalid memo format"
+			}
+		}
+	}
+	
+	return regData, nil
+}
+// Decode transaction data (simplified for MsgSend)
+func decodeTxData(txBytes []byte, cfg *Config) (*TxData, error) {
+	// Use global codec to decode transaction
+	if globalCodec == nil {
+		return nil, fmt.Errorf("codec not initialized")
+	}
+	
+	tx, err := globalCodec.TxConfig.TxDecoder()(txBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode transaction: %w", err)
+	}
+	
+	txData := &TxData{
+		Memo: tx.GetMemo(),
+	}
+	
+	// Extract fee information
+	fee := tx.GetFee()
+	if len(fee) > 0 {
+		txData.Fee = fee[0].Amount.String()
+		txData.Denom = fee[0].Denom
+	}
+	
+	// Extract message data (assuming MsgSend)
+	msgs := tx.GetMsgs()
+	if len(msgs) > 0 {
+		if msgSend, ok := msgs[0].(*banktypes.MsgSend); ok {
+			txData.FromAddress = msgSend.FromAddress
+			txData.ToAddress = msgSend.ToAddress
+			if len(msgSend.Amount) > 0 {
+				txData.Amount = msgSend.Amount[0].Amount.String()
+				if txData.Denom == "" {
+					txData.Denom = msgSend.Amount[0].Denom
+				}
+			}
+		}
+	}
+	
+	return txData, nil
+}
+
+// Get transaction status string
+func getTxStatus(code uint32) string {
+	if code == 0 {
+		return "✅ Success"
+	}
+	return fmt.Sprintf("❌ Failed (Code: %d)", code)
+}
+
+// Get detailed chain status
+func getDetailedChainStatus(rpcEndpoint string) (*ChainStatus, error) {
+	rpcClient, err := client.NewClientFromNode(rpcEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC client: %w", err)
+	}
+	
+	status, err := rpcClient.Status(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status: %w", err)
+	}
+	
+	return &ChainStatus{
+		LatestBlockHeight: status.SyncInfo.LatestBlockHeight,
+		LatestBlockTime:   status.SyncInfo.LatestBlockTime,
+		ChainID:          status.NodeInfo.Network,
+		NodeVersion:      status.NodeInfo.Version,
+		CatchingUp:       status.SyncInfo.CatchingUp,
+	}, nil
+}
+
+/ Enhanced list registrations command with blockchain data
+var listRegistrationsCmd = &cobra.Command{
+	Use:   "list-registrations",
+	Short: "List all registrations with blockchain verification",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get local hashes
+		hashes, err := getLocalRegistrationHashes()
+		if err != nil {
+			fmt.Printf("❌ No local registrations found: %v\n", err)
+			fmt.Println("💡 Run: ./bin/medasdigital-client register --from <keyname>")
+			return nil
+		}
+		
+		cfg := loadConfig()
+		fmt.Printf("📋 Found %d local registration hash(es), fetching from blockchain...\n", len(hashes))
+		fmt.Println("=" + strings.Repeat("=", 80))
+		
+		var validRegistrations []*BlockchainRegistrationData
+		
+		for i, hash := range hashes {
+			fmt.Printf("\n%d. 📊 Transaction Hash: %s\n", i+1, hash)
+			
+			regData, err := fetchRegistrationFromBlockchain(hash, cfg)
+			if err != nil {
+				fmt.Printf("   ❌ Failed to fetch from blockchain: %v\n", err)
+				continue
+			}
+			
+			validRegistrations = append(validRegistrations, regData)
+			
+			fmt.Printf("   🆔 Client ID: %s\n", regData.ClientID)
+			fmt.Printf("   📍 Address: %s\n", regData.FromAddress)
+			fmt.Printf("   🔧 Capabilities: %v\n", regData.RegistrationData.Capabilities)
+			fmt.Printf("   🏔️  Block: %d\n", regData.BlockHeight)
+			fmt.Printf("   🕒 Time: %s\n", regData.BlockTime.Format("2006-01-02 15:04:05"))
+			fmt.Printf("   ⛽ Gas: %d / %d\n", regData.GasUsed, regData.GasWanted)
+			fmt.Printf("   💰 Fee: %s %s\n", regData.Fee, regData.Denom)
+			fmt.Printf("   🔍 Status: %s\n", regData.TxStatus)
+			fmt.Printf("   ✅ Verification: %s\n", regData.VerificationStatus)
+		}
+		
+		fmt.Println("\n=" + strings.Repeat("=", 80))
+		fmt.Printf("✅ Successfully verified %d/%d registrations from blockchain\n", 
+			len(validRegistrations), len(hashes))
+		
+		return nil
+	},
+}
+
+// Enhanced whoami command with blockchain data
+var whoamiCmd = &cobra.Command{
+	Use:   "whoami",
+	Short: "Show current client identity from blockchain",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		hashes, err := getLocalRegistrationHashes()
+		if err != nil {
+			fmt.Println("❌ Not registered")
+			fmt.Println("💡 Run: ./bin/medasdigital-client register --from <keyname>")
+			return nil
+		}
+		
+		cfg := loadConfig()
+		var latest *BlockchainRegistrationData
+		
+		// Find most recent valid registration from blockchain
+		for _, hash := range hashes {
+			if regData, err := fetchRegistrationFromBlockchain(hash, cfg); err == nil {
+				if latest == nil || regData.BlockTime.After(latest.BlockTime) {
+					latest = regData
+				}
+			}
+		}
+		
+		if latest == nil {
+			fmt.Println("❌ No valid registrations found on blockchain")
+			fmt.Printf("💡 Found %d local hash(es) but none could be verified\n", len(hashes))
+			return nil
+		}
+		
+		fmt.Println("👤 Current Client Identity (Blockchain Verified)")
+		fmt.Println("=" + strings.Repeat("=", 50))
+		fmt.Printf("🆔 Client ID: %s\n", latest.ClientID)
+		fmt.Printf("📍 Address: %s\n", latest.FromAddress)
+		fmt.Printf("🔧 Capabilities: %v\n", latest.RegistrationData.Capabilities)
+		fmt.Printf("📊 Registration TX: %s\n", latest.TransactionHash)
+		fmt.Printf("🏔️  Block Height: %d\n", latest.BlockHeight)
+		fmt.Printf("🕒 Registered: %s\n", latest.BlockTime.Format("2006-01-02 15:04:05"))
+		fmt.Printf("⛽ Gas Used: %d / %d\n", latest.GasUsed, latest.GasWanted)
+		fmt.Printf("💰 Fee Paid: %s %s\n", latest.Fee, latest.Denom)
+		fmt.Printf("🔍 Status: %s\n", latest.TxStatus)
+		fmt.Printf("✅ Verification: %s\n", latest.VerificationStatus)
+		
+		return nil
+	},
+}
+
+// Helper function to truncate strings
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
