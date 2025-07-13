@@ -7,22 +7,23 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
-	"net/http"
-	"io"
 
-	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
-	"github.com/cosmos/cosmos-sdk/codec"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
-	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	sdkmath "cosmossdk.io/math"
 )
 
 
@@ -502,6 +503,8 @@ func GetLocalRegistrationHashes() ([]string, error) {
 	return hashes, nil
 }
 
+/// ERSETZEN Sie die FetchRegistrationFromBlockchain Funktion in registration.go:
+
 // FetchRegistrationFromBlockchain fetches complete registration data from blockchain
 func FetchRegistrationFromBlockchain(txHash string, rpcEndpoint, chainID string, codec codec.Codec) (*BlockchainRegistrationData, error) {
 	// Create RPC client
@@ -639,21 +642,7 @@ func GenerateClientIDFromHash(txHash string) string {
 	return fmt.Sprintf("client-%s", shortHash)
 }
 
-// RegisterInterfaces registers the concrete message types with the interface registry
-func RegisterInterfaces(registry types.InterfaceRegistry) {
-	// Register auth interfaces
-	authtypes.RegisterInterfaces(registry)
-	
-	// Register bank interfaces  
-	banktypes.RegisterInterfaces(registry)
-	
-	// Register account implementations
-	registry.RegisterImplementations(
-		(*authtypes.AccountI)(nil),
-		&authtypes.BaseAccount{},
-		&authtypes.ModuleAccount{},
-	)
-}
+
 
 // TruncateString helper function
 func TruncateString(s string, maxLen int) string {
