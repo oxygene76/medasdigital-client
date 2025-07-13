@@ -4,6 +4,8 @@ import (
 	"context"
     	"fmt"
 	"os"
+	"io"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -747,6 +749,101 @@ var analyzePhotometricCmd = &cobra.Command{
 	},
 }
 
+var balanceCmd = &cobra.Command{
+	Use:   "balance [address]",
+	Short: "Check account balance using multiple methods",
+	Long:  "Check account balance using Tendermint RPC and alternative query methods",
+	Args:  cobra.RangeArgs(0, 1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var address string
+		
+		if len(args) > 0 {
+			address = args[0]
+		} else {
+			// Use default key
+			from, _ := cmd.Flags().GetString("from")
+			if from == "" {
+				return fmt.Errorf("please provide address or use --from flag")
+			}
+			
+			clientCtx, err := initKeysClientContext()
+			if err != nil {
+				return fmt.Errorf("failed to initialize client context: %w", err)
+			}
+			
+			keyInfo, err := clientCtx.Keyring.Key(from)
+			if err != nil {
+				return fmt.Errorf("key not found: %w", err)
+			}
+			
+			addr, err := keyInfo.GetAddress()
+			if err != nil {
+				return fmt.Errorf("failed to get address: %w", err)
+			}
+			
+			address = addr.String()
+		}
+		
+		fmt.Printf("💰 Checking balance for: %s\n", address)
+		fmt.Println("=" + strings.Repeat("=", 60))
+		
+		cfg := loadConfig()
+		
+		// Method 1: Direct Tendermint RPC Balance Query
+		if balance, err := queryBalanceViaTendermint(address, cfg); err != nil {
+			fmt.Printf("❌ Tendermint RPC Query failed: %v\n", err)
+		} else {
+			fmt.Println("✅ Tendermint RPC Balance Query:")
+			if len(balance) == 0 {
+				fmt.Printf("   Balance: 0 (no funds)\n")
+			} else {
+				for _, coin := range balance {
+					fmt.Printf("   %s %s\n", coin.Amount, coin.Denom)
+				}
+			}
+		}
+		
+		// Method 2: Alternative REST Query (different format)
+		fmt.Println("\n🔍 Alternative REST Query:")
+		if balance, err := queryBalanceViaREST(address, cfg); err != nil {
+			fmt.Printf("❌ REST Query failed: %v\n", err)
+		} else {
+			fmt.Println("✅ REST Balance Query:")
+			if len(balance) == 0 {
+				fmt.Printf("   Balance: 0 (no funds)\n")
+			} else {
+				for denom, amount := range balance {
+					fmt.Printf("   %s %s\n", amount, denom)
+				}
+			}
+		}
+		
+		// Method 3: Account Info with Bank Module
+		fmt.Println("\n🏦 Bank Module Query:")
+		if balance, err := queryBalanceViaBankModule(address, cfg); err != nil {
+			fmt.Printf("❌ Bank Module Query failed: %v\n", err)
+		} else {
+			fmt.Println("✅ Bank Module Balance:")
+			if len(balance) == 0 {
+				fmt.Printf("   Balance: 0 (no funds)\n")
+			} else {
+				for _, coin := range balance {
+					fmt.Printf("   %s %s\n", coin.Amount, coin.Denom)
+				}
+			}
+		}
+		
+		// Method 4: Transaction History Analysis
+		fmt.Println("\n📊 Transaction History Analysis:")
+		if err := analyzeTransactionHistory(address, cfg); err != nil {
+			fmt.Printf("❌ Transaction analysis failed: %v\n", err)
+		}
+		
+		return nil
+	},
+}
+
+
 // analyzeClusteringCmd performs clustering analysis
 var analyzeClusteringCmd = &cobra.Command{
 	Use:   "clustering",
@@ -879,9 +976,11 @@ func init() {
 
 	addKeysCommands()
 	checkAccountCmd.Flags().String("from", "", "Key name to check")
+	balanceCmd.Flags().String("from", "", "Key name to check balance for")
 	
 	
 	// Add subcommands
+	rootCmd.AddCommand(balanceCmd)
 	rootCmd.AddCommand(listRegistrationsCmd)
 	rootCmd.AddCommand(whoamiCmd)
 	rootCmd.AddCommand(initCmd)
@@ -1904,6 +2003,220 @@ func testGPUAvailability() (bool, string) {
 	}
 	
 	return false, "No NVIDIA GPUs detected"
+}
+
+
+// Method 1: Direct Tendermint RPC Query
+func queryBalanceViaTendermint(address string, cfg *Config) ([]sdk.Coin, error) {
+	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC client: %w", err)
+	}
+	
+	// Query using ABCI query directly
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	// Try different query paths
+	queryPaths := []string{
+		fmt.Sprintf("store/bank/key/balances/%s", address),
+		fmt.Sprintf("custom/bank/balances/%s", address),
+		fmt.Sprintf("bank/balances/%s", address),
+	}
+	
+	for _, path := range queryPaths {
+		result, err := rpcClient.ABCIQuery(ctx, path, nil)
+		if err == nil && result.Response.Code == 0 && len(result.Response.Value) > 0 {
+			// Try to decode the response
+			fmt.Printf("   Found data via path: %s\n", path)
+			fmt.Printf("   Raw data: %x\n", result.Response.Value)
+			
+			// Try to parse as JSON or protobuf
+			var coins []sdk.Coin
+			if err := json.Unmarshal(result.Response.Value, &coins); err == nil {
+				return coins, nil
+			}
+		}
+	}
+	
+	return nil, fmt.Errorf("no balance data found via Tendermint RPC")
+}
+
+// Method 2: Alternative REST Query
+func queryBalanceViaREST(address string, cfg *Config) (map[string]string, error) {
+	// Parse the RPC endpoint to get the base URL
+	rpcURL := cfg.Chain.RPCEndpoint
+	// Convert RPC URL to REST URL (common pattern)
+	restURL := strings.Replace(rpcURL, ":26657", ":1317", 1)
+	restURL = strings.Replace(restURL, "rpc.", "api.", 1)
+	
+	// Try different REST endpoints
+	endpoints := []string{
+		fmt.Sprintf("%s/cosmos/bank/v1beta1/balances/%s", restURL, address),
+		fmt.Sprintf("%s/bank/balances/%s", restURL, address),
+		fmt.Sprintf("%s/cosmos/bank/v1beta1/all_balances/%s", restURL, address),
+	}
+	
+	for _, endpoint := range endpoints {
+		fmt.Printf("   Trying: %s\n", endpoint)
+		
+		resp, err := http.Get(endpoint)
+		if err != nil {
+			fmt.Printf("   HTTP Error: %v\n", err)
+			continue
+		}
+		defer resp.Body.Close()
+		
+		if resp.StatusCode == 200 {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				continue
+			}
+			
+			fmt.Printf("   Response: %s\n", string(body))
+			
+			// Try to parse the JSON response
+			var result map[string]interface{}
+			if err := json.Unmarshal(body, &result); err == nil {
+				balances := make(map[string]string)
+				
+				// Different possible JSON structures
+				if balancesArray, ok := result["balances"].([]interface{}); ok {
+					for _, bal := range balancesArray {
+						if balMap, ok := bal.(map[string]interface{}); ok {
+							if denom, ok := balMap["denom"].(string); ok {
+								if amount, ok := balMap["amount"].(string); ok {
+									balances[denom] = amount
+								}
+							}
+						}
+					}
+				}
+				
+				if len(balances) > 0 {
+					return balances, nil
+				}
+			}
+		}
+	}
+	
+	return nil, fmt.Errorf("no REST endpoint returned valid balance data")
+}
+
+// Method 3: Bank Module Query
+func queryBalanceViaBankModule(address string, cfg *Config) ([]sdk.Coin, error) {
+	// Create proper client context
+	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC client: %w", err)
+	}
+	
+	if globalInterfaceRegistry == nil {
+		globalInterfaceRegistry = getInterfaceRegistry()
+	}
+	if globalCodec == nil {
+		globalCodec = codec.NewProtoCodec(globalInterfaceRegistry)
+	}
+	
+	queryCtx := client.Context{}.
+		WithClient(rpcClient).
+		WithChainID(cfg.Chain.ID).
+		WithCodec(globalCodec).
+		WithInterfaceRegistry(globalInterfaceRegistry)
+	
+	// Try to use bank query client directly
+	addr, err := sdk.AccAddressFromBech32(address)
+	if err != nil {
+		return nil, fmt.Errorf("invalid address: %w", err)
+	}
+	
+	// Try different bank query approaches
+	denoms := []string{"umedas", "medas", "stake", "token"}
+	
+	var totalBalance []sdk.Coin
+	for _, denom := range denoms {
+		// Try to query specific denom
+		queryReq := &banktypes.QueryBalanceRequest{
+			Address: address,
+			Denom:   denom,
+		}
+		
+		reqBytes, err := queryCtx.Codec.Marshal(queryReq)
+		if err != nil {
+			continue
+		}
+		
+		res, _, err := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/Balance", reqBytes)
+		if err != nil {
+			fmt.Printf("   Error querying %s: %v\n", denom, err)
+			continue
+		}
+		
+		var queryRes banktypes.QueryBalanceResponse
+		if err := queryCtx.Codec.Unmarshal(res, &queryRes); err != nil {
+			continue
+		}
+		
+		if queryRes.Balance != nil && !queryRes.Balance.Amount.IsZero() {
+			totalBalance = append(totalBalance, *queryRes.Balance)
+		}
+	}
+	
+	return totalBalance, nil
+}
+
+// Method 4: Analyze Transaction History for Balance
+func analyzeTransactionHistory(address string, cfg *Config) error {
+	rpcClient, err := client.NewClientFromNode(cfg.Chain.RPCEndpoint)
+	if err != nil {
+		return fmt.Errorf("failed to create RPC client: %w", err)
+	}
+	
+	// Get recent transactions
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	// Search for transactions involving this address
+	query := fmt.Sprintf("transfer.recipient='%s' OR transfer.sender='%s'", address, address)
+	
+	result, err := rpcClient.TxSearch(ctx, query, false, nil, nil, "desc")
+	if err != nil {
+		return fmt.Errorf("failed to search transactions: %w", err)
+	}
+	
+	fmt.Printf("   Found %d transactions involving this address\n", len(result.Txs))
+	
+	if len(result.Txs) > 0 {
+		fmt.Println("   Recent transactions:")
+		for i, tx := range result.Txs[:min(5, len(result.Txs))] {
+			fmt.Printf("     %d. Block %d: %s (Code: %d)\n", 
+				i+1, tx.Height, tx.Hash.String(), tx.TxResult.Code)
+		}
+		
+		// Analyze last transaction for balance hints
+		lastTx := result.Txs[0]
+		if len(lastTx.TxResult.Events) > 0 {
+			fmt.Println("   Last transaction events:")
+			for _, event := range lastTx.TxResult.Events {
+				if event.Type == "transfer" || event.Type == "coin_spent" || event.Type == "coin_received" {
+					fmt.Printf("     %s:\n", event.Type)
+					for _, attr := range event.Attributes {
+						fmt.Printf("       %s: %s\n", attr.Key, attr.Value)
+					}
+				}
+			}
+		}
+	}
+	
+	return nil
+}
+
+// Helper function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func main() {
