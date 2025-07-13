@@ -117,10 +117,10 @@ func NewRegistrationManager(baseDenom string) *RegistrationManager {
 	}
 }
 
-// CheckExistingRegistration checks if address is already registered
-func (rm *RegistrationManager) CheckExistingRegistration(address string) (*RegistrationResult, error) {
-	// First check local registrations
-	if localReg, err := rm.getLocalRegistrationByAddress(address); err == nil {
+// CheckExistingRegistration checks if address is already registered with same type
+func (rm *RegistrationManager) CheckExistingRegistration(address string, regType string) (*RegistrationResult, error) {
+	// First check local registrations for the specific type
+	if localReg, err := rm.getLocalRegistrationByAddress(address, regType); err == nil {
 		return localReg, nil
 	}
 	
@@ -129,8 +129,8 @@ func (rm *RegistrationManager) CheckExistingRegistration(address string) (*Regis
 	return nil, nil
 }
 
-// getLocalRegistrationByAddress searches local registrations for address
-func (rm *RegistrationManager) getLocalRegistrationByAddress(address string) (*RegistrationResult, error) {
+// getLocalRegistrationByAddress searches local registrations for address and type
+func (rm *RegistrationManager) getLocalRegistrationByAddress(address string, regType string) (*RegistrationResult, error) {
 	homeDir, _ := os.UserHomeDir()
 	indexPath := filepath.Join(homeDir, ".medasdigital-client", "registrations", "index.json")
 	
@@ -151,16 +151,21 @@ func (rm *RegistrationManager) getLocalRegistrationByAddress(address string) (*R
 		return nil, fmt.Errorf("failed to parse registration index: %w", err)
 	}
 	
-	// Search for address in registrations
+	// Search for address AND registration type in registrations
 	for _, reg := range registrations {
-		// Check ClientRegistrationData
+		// First check if registration type matches
+		if reg.RegistrationType != regType {
+			continue // Skip different registration types
+		}
+		
+		// Check ClientRegistrationData (simple type)
 		if clientReg, ok := reg.RegistrationData.(ClientRegistrationData); ok {
 			if clientReg.ClientAddress == address {
 				return &reg, nil
 			}
 		}
 		
-		// Check ChatClientRegistration
+		// Check ChatClientRegistration (chat type)
 		if chatReg, ok := reg.RegistrationData.(*ChatClientRegistration); ok {
 			if chatReg.ClientAddress == address {
 				return &reg, nil
@@ -177,28 +182,34 @@ func (rm *RegistrationManager) getLocalRegistrationByAddress(address string) (*R
 		}
 	}
 	
-	return nil, fmt.Errorf("no registration found for address %s", address)
+	return nil, fmt.Errorf("no %s registration found for address %s", regType, address)
 }
 
-// PromptUserForReregistration asks user what to do if already registered
+
+/ Enhanced PromptUserForReregistration to show registration type clearly
 func (rm *RegistrationManager) PromptUserForReregistration(existingReg *RegistrationResult, regType string) (bool, error) {
-	fmt.Printf("\n⚠️  EXISTING REGISTRATION FOUND\n")
+	fmt.Printf("\n⚠️  EXISTING %s REGISTRATION FOUND\n", strings.ToUpper(regType))
 	fmt.Printf("🆔 Client ID: %s\n", existingReg.ClientID)
 	fmt.Printf("📝 Transaction: %s\n", existingReg.TransactionHash)
 	fmt.Printf("🕒 Registered: %s\n", existingReg.RegisteredAt.Format("2006-01-02 15:04:05"))
-	fmt.Printf("📊 Type: %s\n", existingReg.RegistrationType)
+	fmt.Printf("📊 Registration Type: %s\n", existingReg.RegistrationType)
 	
 	// Show existing registration details
 	if clientReg, ok := existingReg.RegistrationData.(ClientRegistrationData); ok {
 		fmt.Printf("🔧 Current Capabilities: %v\n", clientReg.Capabilities)
+		if clientReg.Metadata != "" {
+			fmt.Printf("📋 Metadata: %s\n", clientReg.Metadata)
+		}
 	} else if chatReg, ok := existingReg.RegistrationData.(*ChatClientRegistration); ok {
 		fmt.Printf("📛 Display Name: %s\n", chatReg.DisplayName)
 		fmt.Printf("🏛️  Institution: %s\n", chatReg.Institution)
 		fmt.Printf("🔧 Current Capabilities: %v\n", chatReg.Capabilities)
 	}
 	
-	fmt.Printf("\n🤔 What would you like to do?\n")
-	fmt.Printf("   [1] Continue with new registration (will overwrite)\n")
+	fmt.Printf("\n🤔 You are trying to register a NEW %s registration.\n", strings.ToUpper(regType))
+	fmt.Printf("   This will OVERWRITE your existing %s registration.\n", strings.ToUpper(regType))
+	fmt.Printf("\n   What would you like to do?\n")
+	fmt.Printf("   [1] Continue with new %s registration (will overwrite)\n", regType)
 	fmt.Printf("   [2] Cancel registration\n")
 	fmt.Printf("   [3] Show existing registration details\n")
 	fmt.Printf("\nChoice (1-3): ")
@@ -222,7 +233,6 @@ func (rm *RegistrationManager) PromptUserForReregistration(existingReg *Registra
 		return false, fmt.Errorf("invalid choice")
 	}
 }
-
 // displayExistingRegistration shows detailed info about existing registration
 func (rm *RegistrationManager) displayExistingRegistration(reg *RegistrationResult) {
 	fmt.Printf("\n📋 EXISTING REGISTRATION DETAILS\n")
@@ -253,13 +263,13 @@ func (rm *RegistrationManager) displayExistingRegistration(reg *RegistrationResu
 	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
 }
 
-// RegisterClientSimple performs basic client registration (legacy compatibility)
+// UpdateRegisterClientSimple to use type-specific check
 func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fromAddress string, capabilities []string, metadata string, gas uint64) (*RegistrationResult, error) {
 	fmt.Println("📝 Performing simple client registration...")
 	
-	// Check if address is already registered
-	if existingReg, err := rm.CheckExistingRegistration(fromAddress); err == nil {
-		fmt.Printf("⚠️  Address %s is already registered!\n", fromAddress)
+	// Check if address is already registered with SIMPLE type
+	if existingReg, err := rm.CheckExistingRegistration(fromAddress, "simple"); err == nil {
+		fmt.Printf("⚠️  Address %s already has a SIMPLE registration!\n", fromAddress)
 		
 		// Ask user what to do
 		proceed, err := rm.PromptUserForReregistration(existingReg, "simple")
@@ -267,7 +277,7 @@ func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fr
 			return nil, err
 		}
 		
-		fmt.Println("🔄 Proceeding with re-registration...")
+		fmt.Println("🔄 Proceeding with simple re-registration...")
 	}
 	
 	// Create legacy registration data
@@ -283,13 +293,14 @@ func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fr
 	return rm.performRegistration(clientCtx, fromAddress, regData, gas, "simple")
 }
 
-// RegisterChatClient performs enhanced registration with chat capabilities
+
+/ UpdateRegisterChatClient to use type-specific check  
 func (rm *RegistrationManager) RegisterChatClient(clientCtx client.Context, registration *ChatClientRegistration) (*RegistrationResult, error) {
 	fmt.Println("💬 Performing enhanced chat client registration...")
 	
-	// Check if address is already registered
-	if existingReg, err := rm.CheckExistingRegistration(registration.ClientAddress); err == nil {
-		fmt.Printf("⚠️  Address %s is already registered!\n", registration.ClientAddress)
+	// Check if address is already registered with CHAT type
+	if existingReg, err := rm.CheckExistingRegistration(registration.ClientAddress, "chat"); err == nil {
+		fmt.Printf("⚠️  Address %s already has a CHAT registration!\n", registration.ClientAddress)
 		
 		// Ask user what to do
 		proceed, err := rm.PromptUserForReregistration(existingReg, "chat")
