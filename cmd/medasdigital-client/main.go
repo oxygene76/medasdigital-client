@@ -709,7 +709,11 @@ allBalancesReqJSON := fmt.Sprintf(`{"address":"%s"}`, address)
 allBalancesPath := "/cosmos.bank.v1beta1.Query/AllBalances"
 fmt.Printf("   Query: %s\n", allBalancesReqJSON)
 
-allBalRes, allBalHeight, allBalErr := queryCtx.QueryWithData(allBalancesPath, []byte(allBalancesReqJSON))
+var allBalRes []byte
+var allBalHeight int64
+var allBalErr error
+allBalRes, allBalHeight, allBalErr = queryCtx.QueryWithData(allBalancesPath, []byte(allBalancesReqJSON))
+
 fmt.Printf("   Result:\n")
 fmt.Printf("     Error: %v\n", allBalErr)
 fmt.Printf("     Height: %d\n", allBalHeight)
@@ -807,7 +811,7 @@ fmt.Printf("   SDK Version: v0.50.10\n")
 fmt.Printf("   RPC Connection: ✅ Working\n")
 
 // Determine what we actually found
-if authErr == nil || allBalErr == nil || accErr == nil {
+if accErr == nil || allBalErr == nil {
     fmt.Printf("   Account Status: ✅ Found via at least one method\n")
 } else {
     fmt.Printf("   Account Status: ❓ Not found via tested methods\n")
@@ -2266,7 +2270,7 @@ func queryBalanceViaBankModule(address string, cfg *Config) ([]sdk.Coin, error) 
 			continue
 		}
 		
-		res, _, err := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/Balance", reqBytes)
+		res, queryHeight, err := queryCtx.QueryWithData("/cosmos.bank.v1beta1.Query/Balance", reqBytes)
 		if err != nil {
 			fmt.Printf("   Error querying %s: %v\n", denom, err)
 			continue
