@@ -7,7 +7,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/oxygene76/medasdigital-client/pkg/blockchain"
+	
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/client/flags"
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	
+	blockchain "github.com/oxygene76/medasdigital-client/pkg/blockchain"
 )
 
 // registerCmd represents the register command with enhanced features
