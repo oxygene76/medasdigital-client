@@ -79,6 +79,7 @@ type RegistrationManager struct {
 	config *RegistrationConfig
 }
 
+// Additional struct needed for blockchain verification
 type BlockchainRegistrationData struct {
 	TransactionHash    string                 `json:"transaction_hash"`
 	BlockHeight        int64                  `json:"block_height"`
