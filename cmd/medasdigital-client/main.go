@@ -1695,14 +1695,17 @@ func fetchRegistrationFromBlockchain(txHash string, cfg *Config) (*BlockchainReg
 	
 	return regData, nil
 }
-// Decode transaction data (simplified for MsgSend)
 func decodeTxData(txBytes []byte, cfg *Config) (*TxData, error) {
-	// Use global codec to decode transaction
+	// Create TxConfig using global codec
 	if globalCodec == nil {
 		return nil, fmt.Errorf("codec not initialized")
 	}
 	
-	tx, err := globalCodec.TxConfig.TxDecoder()(txBytes)
+	// Create TxConfig from global codec
+	txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
+	
+	// Use TxConfig to decode transaction
+	tx, err := txConfig.TxDecoder()(txBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode transaction: %w", err)
 	}
