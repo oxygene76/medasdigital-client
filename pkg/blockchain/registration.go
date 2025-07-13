@@ -268,7 +268,6 @@ func (rm *RegistrationManager) displayExistingRegistration(reg *RegistrationResu
 	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
 }
 
-// UpdateRegisterClientSimple to use type-specific check
 func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fromAddress string, capabilities []string, metadata string, gas uint64) (*RegistrationResult, error) {
 	fmt.Println("📝 Performing simple client registration...")
 	
@@ -276,15 +275,6 @@ func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fr
 	existingReg, err := rm.CheckExistingRegistration(fromAddress, "simple")
 	if err == nil && existingReg != nil {
 		fmt.Printf("⚠️  Address %s already has a SIMPLE registration!\n", fromAddress)
-		
-		// Ask user what to do
-		proceed, err := rm.PromptUserForReregistration(existingReg, "simple")
-		if err != nil || !proceed {
-			return nil, err
-		}
-		
-		fmt.Println("🔄 Proceeding with simple re-registration...")
-	}
 		
 		// Ask user what to do
 		proceed, err := rm.PromptUserForReregistration(existingReg, "simple")
