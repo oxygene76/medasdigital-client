@@ -107,6 +107,8 @@ type TxData struct {
 	Memo        string
 }
 
+
+
 // NewRegistrationManager creates a new registration manager
 func NewRegistrationManager(baseDenom string) *RegistrationManager {
 	return &RegistrationManager{
@@ -628,7 +630,33 @@ func GenerateClientIDFromHash(txHash string) string {
 	return fmt.Sprintf("client-%s", shortHash)
 }
 
+/ CheckExistingRegistration checks if address is already registered
+func (rm *RegistrationManager) CheckExistingRegistration(address string) (*RegistrationResult, error) {
+	// First check local registrations
+	if localReg, err := rm.getLocalRegistrationByAddress(address); err == nil {
+		return localReg, nil
+	}
+	
+	// If not found locally, could implement blockchain search here
+	// For now, return nil (not found)
+	return nil, nil
+}
 
+// getLocalRegistrationByAddress searches local registrations for address
+func (rm *RegistrationManager) getLocalRegistrationByAddress(address string) (*RegistrationResult, error) {
+	homeDir, _ := os.UserHomeDir()
+	indexPath := filepath.Join(homeDir, ".medasdigital-client", "registrations", "index.json")
+	
+	// Check if index file exists
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("no local registrations found")
+	}
+	
+	// Read index file
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read registration index: %w", err)
+	}
 
 // TruncateString helper function
 func TruncateString(s string, maxLen int) string {
