@@ -235,6 +235,11 @@ func (rm *RegistrationManager) PromptUserForReregistration(existingReg *Registra
 }
 // displayExistingRegistration shows detailed info about existing registration
 func (rm *RegistrationManager) displayExistingRegistration(reg *RegistrationResult) {
+	// Safety check
+	if reg == nil {
+		fmt.Printf("❌ Error: Registration data is nil\n")
+		return
+	}
 	fmt.Printf("\n📋 EXISTING REGISTRATION DETAILS\n")
 	fmt.Printf("=" + strings.Repeat("=", 50) + "\n")
 	fmt.Printf("🆔 Client ID: %s\n", reg.ClientID)
@@ -268,8 +273,18 @@ func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fr
 	fmt.Println("📝 Performing simple client registration...")
 	
 	// Check if address is already registered with SIMPLE type
-	if existingReg, err := rm.CheckExistingRegistration(fromAddress, "simple"); err == nil {
+	existingReg, err := rm.CheckExistingRegistration(fromAddress, "simple")
+	if err == nil && existingReg != nil {
 		fmt.Printf("⚠️  Address %s already has a SIMPLE registration!\n", fromAddress)
+		
+		// Ask user what to do
+		proceed, err := rm.PromptUserForReregistration(existingReg, "simple")
+		if err != nil || !proceed {
+			return nil, err
+		}
+		
+		fmt.Println("🔄 Proceeding with simple re-registration...")
+	}
 		
 		// Ask user what to do
 		proceed, err := rm.PromptUserForReregistration(existingReg, "simple")
