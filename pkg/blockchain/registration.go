@@ -119,14 +119,15 @@ func NewRegistrationManager(baseDenom string) *RegistrationManager {
 
 // CheckExistingRegistration checks if address is already registered with same type
 func (rm *RegistrationManager) CheckExistingRegistration(address string, regType string) (*RegistrationResult, error) {
-	// First check local registrations for the specific type
-	if localReg, err := rm.getLocalRegistrationByAddress(address, regType); err == nil {
-		return localReg, nil
+	// Check local registrations for the specific type
+	localReg, err := rm.getLocalRegistrationByAddress(address, regType)
+	if err != nil {
+		// Not found or error reading - return nil, error
+		return nil, err
 	}
 	
-	// If not found locally, could implement blockchain search here
-	// For now, return nil (not found)
-	return nil, nil
+	// Found existing registration - return it
+	return localReg, nil
 }
 
 // getLocalRegistrationByAddress searches local registrations for address and type
@@ -299,12 +300,15 @@ func (rm *RegistrationManager) RegisterClientSimple(clientCtx client.Context, fr
 }
 
 
-// UpdateRegisterChatClient to use type-specific check  
+// ERSETZEN Sie die RegisterChatClient Funktion (Zeilen 308-340) in registration.go:
+
+// RegisterChatClient performs enhanced registration with chat capabilities  
 func (rm *RegistrationManager) RegisterChatClient(clientCtx client.Context, registration *ChatClientRegistration) (*RegistrationResult, error) {
 	fmt.Println("💬 Performing enhanced chat client registration...")
 	
 	// Check if address is already registered with CHAT type
-	if existingReg, err := rm.CheckExistingRegistration(registration.ClientAddress, "chat"); err == nil {
+	existingReg, err := rm.CheckExistingRegistration(registration.ClientAddress, "chat")
+	if err == nil && existingReg != nil {
 		fmt.Printf("⚠️  Address %s already has a CHAT registration!\n", registration.ClientAddress)
 		
 		// Ask user what to do
@@ -340,7 +344,6 @@ func (rm *RegistrationManager) RegisterChatClient(clientCtx client.Context, regi
 	// Use internal registration function
 	return rm.performRegistration(clientCtx, registration.ClientAddress, registration, rm.config.GasLimit, "chat")
 }
-
 // performRegistration handles the actual blockchain transaction
 func (rm *RegistrationManager) performRegistration(clientCtx client.Context, fromAddress string, regData interface{}, gas uint64, regType string) (*RegistrationResult, error) {
 	// Create minimal memo for blockchain (max 256 chars limit)
