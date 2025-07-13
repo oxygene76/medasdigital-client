@@ -210,14 +210,14 @@ var statusCmd = &cobra.Command{
 		fmt.Println("=== MedasDigital Client Status ===")
 		
 		// Get registration hashes from local storage
-		localHashes, err := getLocalRegistrationHashes()
+		localHashes, err := blockchain.GetLocalRegistrationHashes()
 		var blockchainRegistration *BlockchainRegistrationData
 		var isRegistered bool
 		
 		if err == nil && len(localHashes) > 0 {
 			// Try to fetch the most recent registration from blockchain
 			for _, hash := range localHashes {
-				if regData, err := fetchRegistrationFromBlockchain(hash, cfg); err == nil {
+				if regData, err := blockchain.FetchRegistrationFromBlockchain(hash, cfg.Chain.RPCEndpoint, cfg.Chain.ID, globalCodec); err == nil {
 					if blockchainRegistration == nil || regData.BlockTime.After(blockchainRegistration.BlockTime) {
 						blockchainRegistration = regData
 						isRegistered = true
@@ -242,7 +242,7 @@ var statusCmd = &cobra.Command{
 			
 			// Show memo data if available
 			if blockchainRegistration.Memo != "" {
-				fmt.Printf("Blockchain Memo: %s\n", truncateString(blockchainRegistration.Memo, 100))
+				fmt.Printf("Blockchain Memo: %s\n", blockchain.TruncateString(blockchainRegistration.Memo, 100))
 			}
 			
 			fmt.Printf("Verification: ✅ Confirmed on blockchain\n")
@@ -1393,7 +1393,7 @@ var listRegistrationsCmd = &cobra.Command{
 	Short: "List all registrations with blockchain verification",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Get local hashes
-		hashes, err := getLocalRegistrationHashes()
+		hashes, err := blockchain.GetLocalRegistrationHashes()
 		if err != nil {
 			fmt.Printf("❌ No local registrations found: %v\n", err)
 			fmt.Println("💡 Run: ./bin/medasdigital-client register --from <keyname>")
@@ -1409,7 +1409,7 @@ var listRegistrationsCmd = &cobra.Command{
 		for i, hash := range hashes {
 			fmt.Printf("\n%d. 📊 Transaction Hash: %s\n", i+1, hash)
 			
-			regData, err := fetchRegistrationFromBlockchain(hash, cfg)
+			regData, err := blockchain.FetchRegistrationFromBlockchain(hash, cfg.Chain.RPCEndpoint, cfg.Chain.ID, globalCodec)
 			if err != nil {
 				fmt.Printf("   ❌ Failed to fetch from blockchain: %v\n", err)
 				continue
@@ -1441,7 +1441,7 @@ var whoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Show current client identity from blockchain",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		hashes, err := getLocalRegistrationHashes()
+		hashes, err := blockchain.GetLocalRegistrationHashes()
 		if err != nil {
 			fmt.Println("❌ Not registered")
 			fmt.Println("💡 Run: ./bin/medasdigital-client register --from <keyname>")
@@ -1453,7 +1453,7 @@ var whoamiCmd = &cobra.Command{
 		
 		// Find most recent valid registration from blockchain
 		for _, hash := range hashes {
-			if regData, err := fetchRegistrationFromBlockchain(hash, cfg); err == nil {
+			if regData, err := blockchain.FetchRegistrationFromBlockchain(hash, cfg.Chain.RPCEndpoint, cfg.Chain.ID, globalCodec); err == nil {
 				if latest == nil || regData.BlockTime.After(latest.BlockTime) {
 					latest = regData
 				}
@@ -1483,13 +1483,6 @@ var whoamiCmd = &cobra.Command{
 	},
 }
 
-// Helper function to truncate strings
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
 
 // Test GPU availability
 func testGPUAvailability() (bool, string) {
