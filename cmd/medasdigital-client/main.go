@@ -860,6 +860,25 @@ func init() {
 	rootCmd.AddCommand(resultsCmd)
 	rootCmd.AddCommand(queryCmd)
 	rootCmd.AddCommand(realPaymentServiceCmd)
+	// NEUE Computing Commands hinzufügen:
+    rootCmd.AddCommand(realPaymentServiceCmd)  // Payment Service
+    rootCmd.AddCommand(serveCmd)               // Kostenloser Test Service  
+    rootCmd.AddCommand(piCmd)                  // Direkte PI Commands
+    
+    // PI subcommands
+    piCmd.AddCommand(piCalculateCmd)
+    piCmd.AddCommand(piBenchmarkCmd)
+    
+    // Flags für serve command (kostenloser Service)
+    serveCmd.Flags().Int("port", 8080, "Port to listen on")
+    serveCmd.Flags().Int("max-jobs", 2, "Maximum concurrent jobs")
+    serveCmd.Flags().Duration("max-runtime", 30*time.Minute, "Maximum runtime per job")
+    serveCmd.Flags().Bool("test-mode", true, "Enable test mode")
+    
+    // Flags für pi calculate command
+    piCalculateCmd.Flags().String("method", "chudnovsky", "Calculation method (chudnovsky|machin|bailey)")
+    piCalculateCmd.Flags().String("output", "", "Output file for result")
+    piCalculateCmd.Flags().Bool("verbose", false, "Verbose output")
 	
 	// Analyze subcommands
 	analyzeCmd.AddCommand(analyzeOrbitalCmd)
