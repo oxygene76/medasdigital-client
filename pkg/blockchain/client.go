@@ -13,6 +13,7 @@ import (
 	comethttp "github.com/cometbft/cometbft/rpc/client/http"
 	comet "github.com/cometbft/cometbft/rpc/core/types"
 	abci "github.com/cometbft/cometbft/abci/types"
+	"github.com/cosmos/cosmos-sdk/codec/types"
 
 	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 )
@@ -628,14 +629,13 @@ func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*Trans
 	
 	// Decode transaction
 	tx, err := c.decodeTxFromAny(txResponse.TxResponse.Tx)
-	Hash: txResponse.TxResponse.TxHash, // TxHash statt Txhash
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode transaction: %w", err)
 	}
 	
-	// Create transaction data
+	// Create transaction data - KORRIGIERT: TxHash statt Txhash
 	txData := &TransactionData{
-		Hash:      txResponse.TxResponse.Txhash,
+		Hash:      txResponse.TxResponse.TxHash, // ← KORRIGIERT
 		Height:    txResponse.TxResponse.Height,
 		Code:      txResponse.TxResponse.Code,
 		Timestamp: txResponse.TxResponse.Timestamp,
@@ -677,7 +677,6 @@ func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*Trans
 	
 	return txData, nil
 }
-
 // ChainStatus represents blockchain status
 type ChainStatus struct {
 	ChainID         string    `json:"chain_id"`
