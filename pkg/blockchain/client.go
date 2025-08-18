@@ -616,24 +616,10 @@ func (c *Client) decodeTx(txBytes []byte) (sdk.Tx, error) {
 	return c.clientCtx.TxConfig.TxDecoder()(txBytes)
 }
 
-// NACHHER (sicher):
-	func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
-    // NULL-CHECKS hinzufügen
-    if txAny == nil {
-        return nil, fmt.Errorf("transaction data is nil")
-    }
-    
-    if txAny.Value == nil {
-        return nil, fmt.Errorf("transaction value is nil") 
-    }
-    
-    if c.clientCtx.TxConfig == nil {
-        return nil, fmt.Errorf("TxConfig is not initialized")
-    }
-    
+func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
     txBytes := txAny.Value
     return c.clientCtx.TxConfig.TxDecoder()(txBytes)
-	}
+}
 
 // ParseTransactionData parses transaction data for display
 func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*TransactionData, error) {
