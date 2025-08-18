@@ -616,19 +616,8 @@ func (c *Client) decodeTx(txBytes []byte) (sdk.Tx, error) {
 	return c.clientCtx.TxConfig.TxDecoder()(txBytes)
 }
 
-func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
-    txBytes := txAny.Value
-    return c.clientCtx.TxConfig.TxDecoder()(txBytes)
-}
-
-// ParseTransactionData parses transaction data for display
-func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*TransactionData, error) {
-	if txResponse.TxResponse == nil {
-		return nil, fmt.Errorf("no transaction response")
-	}
-	
-	// NACHHER (sicher):
-func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
+// NACHHER (sicher):
+	func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
     // NULL-CHECKS hinzufügen
     if txAny == nil {
         return nil, fmt.Errorf("transaction data is nil")
@@ -644,7 +633,13 @@ func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
     
     txBytes := txAny.Value
     return c.clientCtx.TxConfig.TxDecoder()(txBytes)
-}
+	}
+
+// ParseTransactionData parses transaction data for display
+func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*TransactionData, error) {
+	if txResponse.TxResponse == nil {
+		return nil, fmt.Errorf("no transaction response")
+	}
 	
 	// Create transaction data - KORRIGIERT: TxHash statt Txhash
 	txData := &TransactionData{
