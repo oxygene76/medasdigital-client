@@ -583,9 +583,6 @@ var (
 func init() {
 	serviceStartTime = time.Now()
 	
-	// Add command to root
-	rootCmd.AddCommand(realPaymentServiceCmd)
-	
 	// Command flags
 	realPaymentServiceCmd.Flags().Int("port", 8080, "Port to listen on")
 	realPaymentServiceCmd.Flags().String("service-address", "", "MEDAS address to receive service payments (required)")
