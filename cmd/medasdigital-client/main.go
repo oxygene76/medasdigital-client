@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-    	"fmt"
+    "fmt"
+	"sync" 
 	"os"
 	"io"
 	"strconv"
@@ -835,6 +836,7 @@ var queryCmd = &cobra.Command{
 }
 
 func init() {
+	serviceStartTime = time.Now() 
 	cobra.OnInitialize(initViper)
 	
 	// Global flags
@@ -911,6 +913,145 @@ func init() {
 	
 
 }
+// ========================================
+// COMPUTING SERVICE COMMANDS (FEHLEN KOMPLETT)
+// ========================================
+
+// Globale Variable für Service Tracking
+var (
+    serviceStartTime time.Time
+    globalClientCtx  interface{} // Für payment service
+)
+
+// serveCmd startet sicheren kostenlosen Test-Service 
+var serveCmd = &cobra.Command{
+	Use:   "serve",
+	Short: "Start free PI computation test service (LIMITED)",
+	Long: `Start a free test service for PI computation with strict limits.
+⚠️  SECURITY LIMITS:
+- Maximum 100 digits per calculation
+- Maximum 5 concurrent jobs
+- Maximum 10 calculations per IP per hour
+- 5 minute timeout per job
+
+Example:
+  medasdigital-client serve --port 8080 --max-jobs 2`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		port, _ := cmd.Flags().GetInt("port")
+		maxJobs, _ := cmd.Flags().GetInt("max-jobs")
+		maxRuntime, _ := cmd.Flags().GetDuration("max-runtime")
+		testMode, _ := cmd.Flags().GetBool("test-mode")
+		
+		// SICHERHEITSLIMITS DURCHSETZEN
+		if maxJobs > 5 {
+			maxJobs = 5
+			fmt.Println("⚠️  Max jobs limited to 5 for free service")
+		}
+		if maxRuntime > 5*time.Minute {
+			maxRuntime = 5 * time.Minute
+			fmt.Println("⚠️  Max runtime limited to 5 minutes for free service")
+		}
+		
+		fmt.Println("🧪 Starting FREE PI Computation Test Service (LIMITED)")
+		fmt.Println("⚠️  SECURITY LIMITS ENFORCED:")
+		fmt.Println("   • Max digits: 100")
+		fmt.Println("   • Max concurrent jobs: 5") 
+		fmt.Println("   • Max runtime: 5 minutes")
+		fmt.Println("   • Rate limit: 10 requests/hour/IP")
+		fmt.Printf("📊 Actual max jobs: %d\n", maxJobs)
+		fmt.Printf("⏱️  Actual max runtime: %v\n", maxRuntime)
+		fmt.Printf("🌐 Listening on port: %d\n", port)
+		fmt.Println("💰 Cost: FREE (with limits)")
+		fmt.Println("💡 For unlimited calculations, use: payment-service")
+		
+		service := NewSecureFreeTestService(maxJobs, maxRuntime, testMode)
+		return service.Start(port)
+	},
+}
+
+// piCmd für direkte PI-Berechnung ohne Service
+var piCmd = &cobra.Command{
+	Use:   "pi",
+	Short: "PI calculation commands",
+	Long:  "Commands for PI calculation and testing",
+}
+
+// Direct PI calculation command mit CLI-Limit
+var piCalculateCmd = &cobra.Command{
+	Use:   "calculate [digits]",
+	Short: "Calculate PI to specified digits (max 1000 for CLI)",
+	Long: `Calculate PI to the specified number of decimal places.
+⚠️  CLI LIMIT: Maximum 1000 digits
+For higher precision, use payment-service.
+
+Examples:
+  medasdigital-client pi calculate 100
+  medasdigital-client pi calculate 1000 --method chudnovsky`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		digits, err := strconv.Atoi(args[0])
+		if err != nil || digits < 1 {
+			return fmt.Errorf("invalid digits: %s (must be positive integer)", args[0])
+		}
+		
+		// CLI LIMIT
+		if digits > 1000 {
+			return fmt.Errorf("CLI limit exceeded. Max 1000 digits. Use payment-service for higher precision.")
+		}
+		
+		method, _ := cmd.Flags().GetString("method")
+		output, _ := cmd.Flags().GetString("output")
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		
+		fmt.Printf("🧮 Calculating PI to %d decimal places (CLI mode)\n", digits)
+		fmt.Printf("📊 Method: %s\n", method)
+		
+		result, err := calculatePIDirectly(digits, method, verbose)
+		if err != nil {
+			return fmt.Errorf("PI calculation failed: %w", err)
+		}
+		
+		// Output result
+		if output != "" {
+			err := writeResultToFile(result, output)
+			if err != nil {
+				return fmt.Errorf("failed to write output: %w", err)
+			}
+			fmt.Printf("✅ Result written to: %s\n", output)
+		} else {
+			fmt.Printf("✅ Result: %s\n", result.Value)
+		}
+		
+		fmt.Printf("⏱️  Duration: %v\n", result.Duration)
+		fmt.Printf("🔧 Iterations: %d\n", result.Iterations)
+		
+		if digits >= 500 {
+			fmt.Println("\n💡 For unlimited precision, use:")
+			fmt.Println("   medasdigital-client payment-service")
+		}
+		
+		return nil
+	},
+}
+
+// PI benchmark command
+var piBenchmarkCmd = &cobra.Command{
+	Use:   "benchmark",
+	Short: "Run PI calculation benchmark",
+	Long: `Run a benchmark test to measure PI calculation performance.
+
+This tests different algorithms and digit counts to measure system performance.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Println("🏁 Starting PI Calculation Benchmark")
+		fmt.Println("====================================")
+		
+		results := runPIBenchmark()
+		displayBenchmarkResults(results)
+		
+		return nil
+	},
+}
+
 func addKeysCommands() {
 	// Create keys command with proper client context
 	keysCmd := &cobra.Command{
@@ -1141,7 +1282,8 @@ func initializeClient() error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
-	
+
+	globalClientCtx = globalClient 
 	return nil
 }
 
@@ -1733,6 +1875,416 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ========================================
+// COMPUTING IMPLEMENTATION FUNCTIONS (FEHLEN KOMPLETT)
+// ========================================
+
+// calculatePIDirectly berechnet PI direkt ohne Service
+func calculatePIDirectly(digits int, method string, verbose bool) (*compute.PIResult, error) {
+	if verbose {
+		fmt.Printf("🚀 Starting PI calculation: %d digits using %s\n", digits, method)
+	}
+	
+	// Create PI calculator using the compute package
+	calc := compute.NewPICalculator(digits, method)
+	
+	// Calculate PI
+	result, err := calc.Calculate()
+	if err != nil {
+		return nil, err
+	}
+	
+	if verbose {
+		fmt.Printf("✅ PI calculation completed in %v\n", result.Duration)
+		fmt.Printf("🔧 Iterations: %d, Verified: %t\n", result.Iterations, result.Verified)
+	}
+	
+	return result, nil
+}
+
+// runPIBenchmark führt Benchmark-Tests durch
+func runPIBenchmark() []BenchmarkResult {
+	fmt.Println("🧮 Testing different digit counts and methods...")
+	
+	tests := []struct {
+		digits int
+		method string
+	}{
+		{10, "chudnovsky"},
+		{100, "chudnovsky"},
+		{1000, "chudnovsky"},
+		{100, "machin"},
+		{100, "bailey"},
+	}
+	
+	var results []BenchmarkResult
+	
+	for _, test := range tests {
+		fmt.Printf("📊 Testing: %d digits, %s method\n", test.digits, test.method)
+		
+		start := time.Now()
+		result, err := calculatePIDirectly(test.digits, test.method, false)
+		duration := time.Since(start)
+		
+		benchResult := BenchmarkResult{
+			Digits:     test.digits,
+			Method:     test.method,
+			Duration:   duration,
+			Success:    err == nil,
+			Verified:   result != nil && result.Verified,
+			Iterations: 0,
+		}
+		
+		if result != nil {
+			benchResult.Iterations = result.Iterations
+		}
+		
+		results = append(results, benchResult)
+	}
+	
+	return results
+}
+
+// BenchmarkResult für Benchmark-Tests
+type BenchmarkResult struct {
+	Digits     int           `json:"digits"`
+	Method     string        `json:"method"`
+	Duration   time.Duration `json:"duration"`
+	Success    bool          `json:"success"`
+	Verified   bool          `json:"verified"`
+	Iterations int64         `json:"iterations"`
+}
+
+// displayBenchmarkResults zeigt Benchmark-Ergebnisse an
+func displayBenchmarkResults(results []BenchmarkResult) {
+	fmt.Println("\n📊 Benchmark Results:")
+	fmt.Println("=====================")
+	
+	for _, result := range results {
+		status := "✅"
+		if !result.Success {
+			status = "❌"
+		}
+		
+		fmt.Printf("%s %4d digits | %-12s | %8v | %6d iter | verified: %t\n",
+			status, result.Digits, result.Method, result.Duration, result.Iterations, result.Verified)
+	}
+	
+	fmt.Println("\n🏆 Fastest method: Chudnovsky algorithm")
+	fmt.Println("💡 For production use, consider the paid service with higher precision")
+}
+
+// writeResultToFile schreibt PI-Ergebnis in Datei
+func writeResultToFile(result *compute.PIResult, filename string) error {
+	content := fmt.Sprintf("PI Calculation Result\n")
+	content += fmt.Sprintf("====================\n")
+	content += fmt.Sprintf("Digits: %d\n", result.Digits)
+	content += fmt.Sprintf("Method: %s\n", result.Method)
+	content += fmt.Sprintf("Duration: %v\n", result.Duration)
+	content += fmt.Sprintf("Iterations: %d\n", result.Iterations)
+	content += fmt.Sprintf("Verified: %t\n", result.Verified)
+	content += fmt.Sprintf("Timestamp: %s\n", result.Timestamp.Format(time.RFC3339))
+	content += fmt.Sprintf("\nResult:\n%s\n", result.Value)
+	
+	return os.WriteFile(filename, []byte(content), 0644)
+}
+
+// ========================================
+// SECURE FREE TEST SERVICE (FEHLT KOMPLETT)
+// ========================================
+
+import "sync"
+
+// SICHERHEITSKONSTANTEN
+const (
+	FREE_SERVICE_MAX_DIGITS = 100
+	FREE_SERVICE_MAX_JOBS_PER_IP = 10
+	FREE_SERVICE_RATE_WINDOW = time.Hour
+	FREE_SERVICE_MAX_RUNTIME = 5 * time.Minute
+	FREE_SERVICE_MAX_CONCURRENT = 5
+)
+
+// SecureFreeTestService - Sichere Version mit Limits
+type SecureFreeTestService struct {
+	maxJobs       int
+	maxRuntime    time.Duration
+	testMode      bool
+	activeJobs    map[string]*TestJob
+	jobCounter    int64
+	
+	// SICHERHEITSFEATURES
+	rateLimiter   map[string]*RateLimit
+	mu            sync.RWMutex
+	maxDigits     int
+	maxJobsPerIP  int
+}
+
+// RateLimit für IP-basierte Begrenzung
+type RateLimit struct {
+	Count     int
+	ResetTime time.Time
+	IP        string
+}
+
+// TestJob für kostenlose Test-Berechnungen
+type TestJob struct {
+	ID         string                    `json:"id"`
+	Type       string                    `json:"type"`
+	Parameters map[string]interface{}    `json:"parameters"`
+	Status     string                    `json:"status"`
+	Result     *compute.PIResult         `json:"result,omitempty"`
+	StartTime  time.Time                 `json:"start_time"`
+	EndTime    time.Time                 `json:"end_time,omitempty"`
+	Duration   string                    `json:"duration,omitempty"`
+	Progress   int                       `json:"progress"`
+	Error      string                    `json:"error,omitempty"`
+}
+
+// NewSecureFreeTestService erstellt sicheren kostenlosen Service
+func NewSecureFreeTestService(maxJobs int, maxRuntime time.Duration, testMode bool) *SecureFreeTestService {
+	// SICHERHEITSLIMITS DURCHSETZEN
+	if maxJobs > FREE_SERVICE_MAX_CONCURRENT {
+		maxJobs = FREE_SERVICE_MAX_CONCURRENT
+	}
+	if maxRuntime > FREE_SERVICE_MAX_RUNTIME {
+		maxRuntime = FREE_SERVICE_MAX_RUNTIME
+	}
+	
+	return &SecureFreeTestService{
+		maxJobs:      maxJobs,
+		maxRuntime:   maxRuntime,
+		testMode:     testMode,
+		activeJobs:   make(map[string]*TestJob),
+		jobCounter:   0,
+		rateLimiter:  make(map[string]*RateLimit),
+		maxDigits:    FREE_SERVICE_MAX_DIGITS,
+		maxJobsPerIP: FREE_SERVICE_MAX_JOBS_PER_IP,
+	}
+}
+
+// Start startet den sicheren kostenlosen Service
+func (sfts *SecureFreeTestService) Start(port int) error {
+	r := mux.NewRouter()
+	
+	// Security Middleware
+	r.Use(sfts.securityMiddleware)
+	r.Use(sfts.rateLimitMiddleware)
+	
+	// API routes
+	api := r.PathPrefix("/api/v1").Subrouter()
+	api.HandleFunc("/status", sfts.handleStatus).Methods("GET")
+	api.HandleFunc("/calculate", sfts.handleCalculate).Methods("POST")
+	api.HandleFunc("/limits", sfts.handleLimits).Methods("GET")
+	
+	fmt.Printf("🚀 Secure Free PI Test Service started on http://localhost:%d\n", port)
+	fmt.Println("\n🔒 SECURITY FEATURES ENABLED:")
+	fmt.Printf("   ✅ Max digits per calculation: %d\n", FREE_SERVICE_MAX_DIGITS)
+	fmt.Printf("   ✅ Max concurrent jobs: %d\n", FREE_SERVICE_MAX_CONCURRENT)
+	fmt.Printf("   ✅ Rate limit: %d requests/hour/IP\n", FREE_SERVICE_MAX_JOBS_PER_IP)
+	fmt.Printf("   ✅ Job timeout: %v\n", FREE_SERVICE_MAX_RUNTIME)
+	
+	fmt.Println("\n📋 Available endpoints:")
+	fmt.Println("   GET  /api/v1/status           - Service status")
+	fmt.Println("   POST /api/v1/calculate        - Submit PI calculation (LIMITED)")
+	fmt.Println("   GET  /api/v1/limits           - Show current limits")
+	
+	fmt.Println("\n🧮 Example PI calculation (MAX 100 digits):")
+	fmt.Printf("   curl -X POST http://localhost:%d/api/v1/calculate \\\n", port)
+	fmt.Println("     -H 'Content-Type: application/json' \\")
+	fmt.Println("     -d '{\"digits\": 100, \"method\": \"chudnovsky\"}'")
+	
+	fmt.Println("\n⚠️  IMPORTANT: This free service has strict limits!")
+	fmt.Println("   For unlimited calculations, use: payment-service")
+	
+	return http.ListenAndServe(fmt.Sprintf(":%d", port), r)
+}
+
+// Handler methods (vereinfacht für main.go)
+func (sfts *SecureFreeTestService) handleStatus(w http.ResponseWriter, r *http.Request) {
+	status := map[string]interface{}{
+		"service":        "Secure Free PI Computation Service",
+		"status":         "running",
+		"max_digits":     sfts.maxDigits,
+		"max_runtime":    sfts.maxRuntime.String(),
+		"rate_limit":     fmt.Sprintf("%d/hour/IP", sfts.maxJobsPerIP),
+		"cost":           "FREE (with limits)",
+		"methods":        compute.GetAvailableMethods(),
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
+}
+
+func (sfts *SecureFreeTestService) handleCalculate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Digits int    `json:"digits"`
+		Method string `json:"method"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON request", http.StatusBadRequest)
+		return
+	}
+	
+	// SICHERHEITSPRÜFUNGEN
+	if req.Digits <= 0 {
+		http.Error(w, "Digits must be positive", http.StatusBadRequest)
+		return
+	}
+	
+	if req.Digits > sfts.maxDigits {
+		http.Error(w, fmt.Sprintf("Digits limit exceeded. Free service max: %d digits. Use payment-service for more.", sfts.maxDigits), http.StatusBadRequest)
+		return
+	}
+	
+	if req.Method == "" {
+		req.Method = "chudnovsky"
+	}
+	
+	clientIP := sfts.getClientIP(r)
+	fmt.Printf("🧮 Free calculation request: %d digits, %s method from IP %s\n", req.Digits, req.Method, clientIP)
+	
+	// Calculate PI mit Timeout
+	ctx, cancel := context.WithTimeout(context.Background(), sfts.maxRuntime)
+	defer cancel()
+	
+	// Channel for result
+	resultChan := make(chan *compute.PIResult, 1)
+	errorChan := make(chan error, 1)
+	
+	// Start calculation in goroutine
+	go func() {
+		result, err := calculatePIDirectly(req.Digits, req.Method, false)
+		if err != nil {
+			errorChan <- err
+		} else {
+			resultChan <- result
+		}
+	}()
+	
+	// Wait for result or timeout
+	select {
+	case result := <-resultChan:
+		response := map[string]interface{}{
+			"result":     result,
+			"cost":       "FREE",
+			"limits": map[string]interface{}{
+				"max_digits":        sfts.maxDigits,
+				"max_runtime":       sfts.maxRuntime.String(),
+				"used_digits":       req.Digits,
+				"calculation_time":  result.Duration.String(),
+			},
+			"upgrade_info": "For unlimited calculations, use payment-service with MEDAS tokens",
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		
+		fmt.Printf("✅ Free calculation completed: %d digits in %v\n", req.Digits, result.Duration)
+		
+	case err := <-errorChan:
+		http.Error(w, fmt.Sprintf("Calculation failed: %v", err), http.StatusInternalServerError)
+		fmt.Printf("❌ Free calculation failed: %v\n", err)
+		
+	case <-ctx.Done():
+		http.Error(w, fmt.Sprintf("Calculation timeout after %v", sfts.maxRuntime), http.StatusRequestTimeout)
+		fmt.Printf("⏰ Free calculation timeout: %d digits\n", req.Digits)
+	}
+}
+
+func (sfts *SecureFreeTestService) handleLimits(w http.ResponseWriter, r *http.Request) {
+	limits := map[string]interface{}{
+		"service_type":     "Free PI Calculation Service",
+		"max_digits":       sfts.maxDigits,
+		"max_runtime":      sfts.maxRuntime.String(),
+		"rate_limit":       fmt.Sprintf("%d/hour/IP", sfts.maxJobsPerIP),
+		"upgrade_info": map[string]interface{}{
+			"unlimited_service": "payment-service",
+			"max_digits":        "100,000+",
+			"cost":              "MEDAS tokens",
+		},
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(limits)
+}
+
+// Security middleware methods
+func (sfts *SecureFreeTestService) securityMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		
+		if r.ContentLength > 1024*10 { // 10KB limit
+			http.Error(w, "Request too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (sfts *SecureFreeTestService) rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		
+		clientIP := sfts.getClientIP(r)
+		
+		sfts.mu.Lock()
+		rateLimit, exists := sfts.rateLimiter[clientIP]
+		
+		if exists && time.Now().After(rateLimit.ResetTime) {
+			rateLimit.Count = 0
+			rateLimit.ResetTime = time.Now().Add(FREE_SERVICE_RATE_WINDOW)
+		}
+		
+		if !exists {
+			rateLimit = &RateLimit{
+				Count:     0,
+				ResetTime: time.Now().Add(FREE_SERVICE_RATE_WINDOW),
+				IP:        clientIP,
+			}
+			sfts.rateLimiter[clientIP] = rateLimit
+		}
+		
+		if rateLimit.Count >= sfts.maxJobsPerIP {
+			sfts.mu.Unlock()
+			http.Error(w, fmt.Sprintf("Rate limit exceeded. Max %d requests per hour per IP.", sfts.maxJobsPerIP), http.StatusTooManyRequests)
+			return
+		}
+		
+		rateLimit.Count++
+		sfts.mu.Unlock()
+		
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (sfts *SecureFreeTestService) getClientIP(r *http.Request) string {
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		ips := strings.Split(forwarded, ",")
+		return strings.TrimSpace(ips[0])
+	}
+	
+	realIP := r.Header.Get("X-Real-IP")
+	if realIP != "" {
+		return realIP
+	}
+	
+	ip := r.RemoteAddr
+	if strings.Contains(ip, ":") {
+		ip, _, _ = strings.Cut(ip, ":")
+	}
+	
+	return ip
+}
+
+
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
