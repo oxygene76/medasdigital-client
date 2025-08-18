@@ -859,11 +859,10 @@ func init() {
 	rootCmd.AddCommand(gpuCmd)
 	rootCmd.AddCommand(resultsCmd)
 	rootCmd.AddCommand(queryCmd)
-	rootCmd.AddCommand(realPaymentServiceCmd)
-	// NEUE Computing Commands hinzufügen:
-    rootCmd.AddCommand(realPaymentServiceCmd)  // Payment Service
-    rootCmd.AddCommand(serveCmd)               // Kostenloser Test Service  
-    rootCmd.AddCommand(piCmd)                  // Direkte PI Commands
+	// Computing Commands (vollständig)
+	rootCmd.AddCommand(realPaymentServiceCmd)  // Payment Service
+	rootCmd.AddCommand(serveCmd)               // Kostenloser Test Service  
+	rootCmd.AddCommand(piCmd)   
     
     // PI subcommands
     piCmd.AddCommand(piCalculateCmd)
