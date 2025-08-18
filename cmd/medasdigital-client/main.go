@@ -36,6 +36,8 @@ import (
 
 	blockchain "github.com/oxygene76/medasdigital-client/pkg/blockchain"  // Wieder hinzufügen
 	medasClient "github.com/oxygene76/medasdigital-client/pkg/client"
+	"github.com/oxygene76/medasdigital-client/pkg/compute"
+    "github.com/gorilla/mux"  // Für HTTP Router
 )
 
 const (
