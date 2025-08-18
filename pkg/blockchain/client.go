@@ -8,6 +8,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	txtypes "github.com/cosmos/cosmos-sdk/types/tx"      // ← NEU
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types" // ← NEU
 	comethttp "github.com/cometbft/cometbft/rpc/client/http"
 	comet "github.com/cometbft/cometbft/rpc/core/types"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -421,6 +423,255 @@ func (c *Client) Health() error {
 	return nil
 }
 
+// ===================================
+// TRANSACTION QUERY METHODS (NEU)
+// ===================================
+
+// GetTx queries a transaction by hash using the Cosmos SDK
+func (c *Client) GetTx(ctx context.Context, txHash string) (*txtypes.GetTxResponse, error) {
+	// Create query client using cosmos-sdk/client
+	queryClient := txtypes.NewServiceClient(c.clientCtx)
+	
+	// Query transaction
+	req := &txtypes.GetTxRequest{Hash: txHash}
+	resp, err := queryClient.GetTx(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query transaction %s: %w", txHash, err)
+	}
+	
+	return resp, nil
+}
+
+// GetStatus returns the current blockchain status (alias for existing method)
+func (c *Client) GetStatus(ctx context.Context) (*comet.ResultStatus, error) {
+	// Get status from CometBFT client
+	status, err := c.clientCtx.Client.Status(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get blockchain status: %w", err)
+	}
+	
+	return status, nil
+}
+
+// QueryWithData performs a generic query with custom data (alias for existing method)
+func (c *Client) QueryWithData(ctx context.Context, path string, data []byte) ([]byte, int64, error) {
+	// Use the client context to perform the query
+	result, height, err := c.clientCtx.QueryWithData(path, data)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query failed for path %s: %w", path, err)
+	}
+	
+	return result, height, nil
+}
+
+// ===================================
+// PAYMENT VERIFICATION METHODS (NEU)
+// ===================================
+
+// VerifyPaymentTransaction verifies a blockchain payment transaction
+func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAddr, recipientAddr string, expectedAmount float64, denom string) (bool, error) {
+	// 1. Query transaction by hash
+	txResponse, err := c.GetTx(ctx, txHash)
+	if err != nil {
+		return false, fmt.Errorf("failed to query transaction: %w", err)
+	}
+	
+	if txResponse.TxResponse == nil {
+		return false, fmt.Errorf("transaction not found")
+	}
+	
+	// 2. Check transaction success
+	if txResponse.TxResponse.Code != 0 {
+		return false, fmt.Errorf("transaction failed with code %d", txResponse.TxResponse.Code)
+	}
+	
+	// 3. Parse transaction messages
+	tx, err := c.decodeTx(txResponse.TxResponse.Tx)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode transaction: %w", err)
+	}
+	
+	// 4. Verify payment details
+	for _, msg := range tx.GetMsgs() {
+		if bankMsg, ok := msg.(*banktypes.MsgSend); ok {
+			// Check sender address
+			if bankMsg.FromAddress != senderAddr {
+				continue
+			}
+			
+			// Check recipient address
+			if bankMsg.ToAddress != recipientAddr {
+				continue
+			}
+			
+			// Check amount and denomination
+			for _, coin := range bankMsg.Amount {
+				if coin.Denom == denom {
+					// Convert amount based on denomination
+					var actualAmount float64
+					if denom == "umedas" {
+						actualAmount = float64(coin.Amount.Int64()) / 1000000.0 // 6 decimals
+					} else {
+						actualAmount = float64(coin.Amount.Int64())
+					}
+					
+					// Allow small rounding differences (±0.1%)
+					tolerance := expectedAmount * 0.001
+					if actualAmount >= expectedAmount-tolerance && actualAmount <= expectedAmount+tolerance {
+						return true, nil
+					}
+				}
+			}
+		}
+	}
+	
+	return false, fmt.Errorf("no valid payment found in transaction")
+}
+
+// GetTransactionConfirmations calculates the number of confirmations for a transaction
+func (c *Client) GetTransactionConfirmations(ctx context.Context, txHeight int64) (int64, error) {
+	// Get current blockchain status
+	status, err := c.GetStatus(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get blockchain status: %w", err)
+	}
+	
+	latestHeight := status.SyncInfo.LatestBlockHeight
+	confirmations := latestHeight - txHeight
+	
+	return confirmations, nil
+}
+
+// ===================================
+// BALANCE QUERY METHODS (NEU)
+// ===================================
+
+// GetAccountBalance queries the balance of an account
+func (c *Client) GetAccountBalance(ctx context.Context, address string) (sdk.Coins, error) {
+	// Query balance using bank module
+	queryClient := banktypes.NewQueryClient(c.clientCtx)
+	
+	req := &banktypes.QueryAllBalancesRequest{
+		Address: address,
+	}
+	
+	res, err := queryClient.AllBalances(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query balance for %s: %w", address, err)
+	}
+	
+	return res.Balances, nil
+}
+
+// GetAccountBalanceByDenom queries the balance of a specific denomination
+func (c *Client) GetAccountBalanceByDenom(ctx context.Context, address, denom string) (sdk.Coin, error) {
+	// Query balance using bank module
+	queryClient := banktypes.NewQueryClient(c.clientCtx)
+	
+	req := &banktypes.QueryBalanceRequest{
+		Address: address,
+		Denom:   denom,
+	}
+	
+	res, err := queryClient.Balance(ctx, req)
+	if err != nil {
+		return sdk.Coin{}, fmt.Errorf("failed to query balance for %s/%s: %w", address, denom, err)
+	}
+	
+	return *res.Balance, nil
+}
+
+// ===================================
+// TRANSACTION CREATION METHODS (NEU)
+// ===================================
+
+// CreateSendTransaction creates a MsgSend transaction
+func (c *Client) CreateSendTransaction(fromAddr, toAddr string, amount sdk.Coins, memo string) (*sdk.TxResponse, error) {
+	// Convert addresses
+	fromAddress, err := sdk.AccAddressFromBech32(fromAddr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid from address: %w", err)
+	}
+	
+	toAddress, err := sdk.AccAddressFromBech32(toAddr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid to address: %w", err)
+	}
+	
+	// Create MsgSend
+	msg := banktypes.NewMsgSend(fromAddress, toAddress, amount)
+	
+	// Create transaction
+	return c.sendTransaction(msg, fromAddr)
+}
+
+// ===================================
+// UTILITY METHODS (NEU)
+// ===================================
+
+// decodeTx decodes a transaction from bytes using the TxConfig
+func (c *Client) decodeTx(txBytes []byte) (sdk.Tx, error) {
+	// Use the TxConfig from client context to decode
+	return c.clientCtx.TxConfig.TxDecoder()(txBytes)
+}
+
+// ParseTransactionData parses transaction data for display
+func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*TransactionData, error) {
+	if txResponse.TxResponse == nil {
+		return nil, fmt.Errorf("no transaction response")
+	}
+	
+	// Decode transaction
+	tx, err := c.decodeTx(txResponse.TxResponse.Tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode transaction: %w", err)
+	}
+	
+	// Create transaction data
+	txData := &TransactionData{
+		Hash:      txResponse.TxResponse.Txhash,
+		Height:    txResponse.TxResponse.Height,
+		Code:      txResponse.TxResponse.Code,
+		Timestamp: txResponse.TxResponse.Timestamp,
+		GasUsed:   txResponse.TxResponse.GasUsed,
+		GasWanted: txResponse.TxResponse.GasWanted,
+	}
+	
+	// Try to extract memo
+	if txWithMemo, ok := tx.(interface{ GetMemo() string }); ok {
+		txData.Memo = txWithMemo.GetMemo()
+	}
+	
+	// Try to extract fee
+	if feeTx, ok := tx.(interface{ GetFee() sdk.Coins }); ok {
+		fee := feeTx.GetFee()
+		if len(fee) > 0 {
+			txData.Fee = fee[0].Amount.String()
+			txData.Denom = fee[0].Denom
+		}
+	}
+	
+	// Extract message data
+	msgs := tx.GetMsgs()
+	if len(msgs) > 0 {
+		for _, msg := range msgs {
+			if msgSend, ok := msg.(*banktypes.MsgSend); ok {
+				txData.FromAddress = msgSend.FromAddress
+				txData.ToAddress = msgSend.ToAddress
+				if len(msgSend.Amount) > 0 {
+					txData.Amount = msgSend.Amount[0].Amount.String()
+					if txData.Denom == "" {
+						txData.Denom = msgSend.Amount[0].Denom
+					}
+				}
+				break
+			}
+		}
+	}
+	
+	return txData, nil
+}
+
 // ChainStatus represents blockchain status
 type ChainStatus struct {
 	ChainID         string    `json:"chain_id"`
@@ -439,4 +690,19 @@ type BlockInfo struct {
 	Time     time.Time `json:"time"`
 	NumTxs   int       `json:"num_txs"`
 	Proposer string    `json:"proposer"`
+}
+// TransactionData represents parsed transaction data
+type TransactionData struct {
+	Hash        string `json:"hash"`
+	Height      int64  `json:"height"`
+	Code        uint32 `json:"code"`
+	Timestamp   string `json:"timestamp"`
+	GasUsed     int64  `json:"gas_used"`
+	GasWanted   int64  `json:"gas_wanted"`
+	Fee         string `json:"fee"`
+	Memo        string `json:"memo"`
+	FromAddress string `json:"from_address"`
+	ToAddress   string `json:"to_address"`
+	Amount      string `json:"amount"`
+	Denom       string `json:"denom"`
 }
