@@ -14,6 +14,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	comethttp "github.com/cometbft/cometbft/rpc/client/http"
+	"github.com/cosmos/cosmos-sdk/codec/types"
 
 	itypes "github.com/oxygene76/medasdigital-client/internal/types"
 	"github.com/oxygene76/medasdigital-client/pkg/analysis"
