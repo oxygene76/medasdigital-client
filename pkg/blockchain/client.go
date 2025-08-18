@@ -627,9 +627,20 @@ func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*Trans
 		return nil, fmt.Errorf("no transaction response")
 	}
 	
-	// Create transaction data - KORRIGIERT: TxHash statt Txhash
+	// HINZUFÜGEN: TX dekodieren
+	if txResponse.TxResponse.Tx == nil {
+		return nil, fmt.Errorf("transaction data is nil")
+	}
+	
+	// TX dekodieren
+	decodedTx, err := c.decodeTxFromAny(txResponse.TxResponse.Tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode transaction: %w", err)
+	}
+	
+	// Create transaction data
 	txData := &TransactionData{
-		Hash:      txResponse.TxResponse.TxHash, // ← KORRIGIERT
+		Hash:      txResponse.TxResponse.TxHash,
 		Height:    txResponse.TxResponse.Height,
 		Code:      txResponse.TxResponse.Code,
 		Timestamp: txResponse.TxResponse.Timestamp,
@@ -637,13 +648,13 @@ func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*Trans
 		GasWanted: txResponse.TxResponse.GasWanted,
 	}
 	
-	// Try to extract memo
-	if txWithMemo, ok := tx.(interface{ GetMemo() string }); ok {
+	// Try to extract memo - KORRIGIERT: decodedTx verwenden
+	if txWithMemo, ok := decodedTx.(interface{ GetMemo() string }); ok {
 		txData.Memo = txWithMemo.GetMemo()
 	}
 	
-	// Try to extract fee
-	if feeTx, ok := tx.(interface{ GetFee() sdk.Coins }); ok {
+	// Try to extract fee - KORRIGIERT: decodedTx verwenden
+	if feeTx, ok := decodedTx.(interface{ GetFee() sdk.Coins }); ok {
 		fee := feeTx.GetFee()
 		if len(fee) > 0 {
 			txData.Fee = fee[0].Amount.String()
@@ -651,8 +662,8 @@ func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*Trans
 		}
 	}
 	
-	// Extract message data
-	msgs := tx.GetMsgs()
+	// Extract message data - KORRIGIERT: decodedTx verwenden
+	msgs := decodedTx.GetMsgs()
 	if len(msgs) > 0 {
 		for _, msg := range msgs {
 			if msgSend, ok := msg.(*banktypes.MsgSend); ok {
