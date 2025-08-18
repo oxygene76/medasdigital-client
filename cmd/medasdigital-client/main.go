@@ -857,6 +857,7 @@ func init() {
 	rootCmd.AddCommand(gpuCmd)
 	rootCmd.AddCommand(resultsCmd)
 	rootCmd.AddCommand(queryCmd)
+	rootCmd.AddCommand(realPaymentServiceCmd)
 	
 	// Analyze subcommands
 	analyzeCmd.AddCommand(analyzeOrbitalCmd)
