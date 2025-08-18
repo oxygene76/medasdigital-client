@@ -17,8 +17,6 @@ import (
 	"github.com/oxygene76/medasdigital-client/pkg/blockchain"
 	
 	"github.com/cosmos/cosmos-sdk/client"
-	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
-	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -383,7 +381,7 @@ func (rps *RealPaymentService) verifyAndStartJob(job *compute.ComputeJob) {
 	log.Printf("🔍 Starting payment verification for job %s", job.ID)
 	
 	// Verify payment using the enhanced blockchain client
-	verified, err := rps.verifyPayment(job.PaymentTxHash, job.ClientAddress, job.PriceBreakdown.TotalCost)
+	verified, err := rps.verifyPayment(job.PaymentTxHash, job.ClientAddr, job.PriceBreakdown.TotalCost)
 	if err != nil {
 		log.Printf("❌ Payment verification failed for job %s: %v", job.ID, err)
 		job.Status = compute.StatusFailed
@@ -407,7 +405,7 @@ func (rps *RealPaymentService) verifyAndStartJob(job *compute.ComputeJob) {
 	go rps.distributeCommunityFee(job)
 	
 	// Start job processing - verwende korrekte Methode
-	if err := rps.jobManager.ProcessJob(job.ID); err != nil {
+	if err := rps.jobManager.StartJob(job.ID); err != nil {
 		log.Printf("Failed to start job %s: %v", job.ID, err)
 		job.Status = compute.StatusFailed
 		job.Error = fmt.Sprintf("Job start failed: %v", err)
@@ -431,7 +429,11 @@ func (rps *RealPaymentService) handleListJobs(w http.ResponseWriter, r *http.Req
 	}
 	
 	// Get jobs - korrekte Parameter wie im Original
-	jobs := rps.jobManager.ListJobs(clientAddr, statusStr, limit)
+	var status compute.JobStatus
+	if statusStr != "" {
+    	status = compute.JobStatus(statusStr)
+	}
+	jobs := rps.jobManager.ListJobs(clientAddr, status)
 	
 	response := map[string]interface{}{
 		"jobs":  jobs,
