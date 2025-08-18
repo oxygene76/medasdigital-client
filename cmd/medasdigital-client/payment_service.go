@@ -404,14 +404,9 @@ func (rps *RealPaymentService) verifyAndStartJob(job *compute.ComputeJob) {
 	// Distribute community fee (in background)
 	go rps.distributeCommunityFee(job)
 	
-	// Start job processing - verwende korrekte Methode
-	if err := rps.jobManager.StartJob(job.ID); err != nil {
-		log.Printf("Failed to start job %s: %v", job.ID, err)
-		job.Status = compute.StatusFailed
-		job.Error = fmt.Sprintf("Job start failed: %v", err)
-	} else {
-		log.Printf("🚀 Job %s started successfully", job.ID)
-	}
+	// Jobs werden automatisch von Workern verarbeitet
+	// Der JobManager hat eine Worker-Schleife, die Jobs automatisch aus der Queue nimmt
+	log.Printf("🚀 Job %s verified and queued for processing", job.ID)
 }
 
 // handleListJobs lists jobs with optional filtering
