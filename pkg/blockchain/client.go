@@ -486,7 +486,7 @@ func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAdd
 	}
 	
 	// 3. Parse transaction messages
-	tx, err := c.decodeTx(txResponse.TxResponse.Tx)
+	tx, err := c.decodeTxFromAny(txResponse.TxResponse.Tx)
 	if err != nil {
 		return false, fmt.Errorf("failed to decode transaction: %w", err)
 	}
@@ -615,6 +615,11 @@ func (c *Client) decodeTx(txBytes []byte) (sdk.Tx, error) {
 	return c.clientCtx.TxConfig.TxDecoder()(txBytes)
 }
 
+func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
+    txBytes := txAny.Value
+    return c.clientCtx.TxConfig.TxDecoder()(txBytes)
+}
+
 // ParseTransactionData parses transaction data for display
 func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*TransactionData, error) {
 	if txResponse.TxResponse == nil {
@@ -622,7 +627,8 @@ func (c *Client) ParseTransactionData(txResponse *txtypes.GetTxResponse) (*Trans
 	}
 	
 	// Decode transaction
-	tx, err := c.decodeTx(txResponse.TxResponse.Tx)
+	tx, err := c.decodeTxFromAny(txResponse.TxResponse.Tx)
+	Hash: txResponse.TxResponse.TxHash, // TxHash statt Txhash
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode transaction: %w", err)
 	}
