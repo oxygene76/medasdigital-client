@@ -64,10 +64,11 @@ var (
 	// ✅ NEU: Globale Registry-Instanzen um Konflikte zu vermeiden
 	globalInterfaceRegistry types.InterfaceRegistry
 	globalCodec             codec.Codec
+	
+	// ✅ Computing Service Tracking (NEU HINZUGEFÜGT)
+	serviceStartTime time.Time
+	globalClientCtx  interface{} // Für payment service
 )
-
-
-
 
 
 type ChainStatus struct {
@@ -916,12 +917,6 @@ func init() {
 // ========================================
 // COMPUTING SERVICE COMMANDS (FEHLEN KOMPLETT)
 // ========================================
-
-// Globale Variable für Service Tracking
-var (
-    serviceStartTime time.Time
-    globalClientCtx  interface{} // Für payment service
-)
 
 // serveCmd startet sicheren kostenlosen Test-Service 
 var serveCmd = &cobra.Command{
@@ -1993,8 +1988,6 @@ func writeResultToFile(result *compute.PIResult, filename string) error {
 // ========================================
 // SECURE FREE TEST SERVICE (FEHLT KOMPLETT)
 // ========================================
-
-import "sync"
 
 // SICHERHEITSKONSTANTEN
 const (
