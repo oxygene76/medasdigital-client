@@ -18,6 +18,10 @@ import (
 	
 	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/auth/tx"
+    authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
+    authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+    "github.com/cosmos/cosmos-sdk/codec"
 )
 
 // realPaymentServiceCmd implements the enhanced payment service with actual blockchain verification
@@ -177,27 +181,33 @@ func (rps *RealPaymentService) Start(port int) error {
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
 
-// initializeBlockchainClient initializes the blockchain client context
 func (rps *RealPaymentService) initializeBlockchainClient() error {
-	// Create RPC client
-	rpcClient, err := client.NewClientFromNode(rps.rpcEndpoint)
-	if err != nil {
-		return fmt.Errorf("failed to create RPC client: %w", err)
-	}
-	
-	// Create client context - verwende globale Variablen aus main.go
-	rps.clientCtx = client.Context{}.
-		WithClient(rpcClient).
-		WithChainID(rps.chainID).
-		WithCodec(globalCodec).
-		WithInterfaceRegistry(globalInterfaceRegistry)
-	
-	// Create blockchain client using your extended package
-	rps.blockchainClient = blockchain.NewClient(rps.clientCtx)
-	
-	log.Printf("✅ Blockchain client initialized for payment verification")
-	log.Printf("🔗 Connected to: %s (Chain: %s)", rps.rpcEndpoint, rps.chainID)
-	return nil
+    // Create RPC client
+    rpcClient, err := client.NewClientFromNode(rps.rpcEndpoint)
+    if err != nil {
+        return fmt.Errorf("failed to create RPC client: %w", err)
+    }
+
+    // Create TxConfig with proper codec setup
+    txConfig := authtx.NewTxConfig(globalCodec, authtx.DefaultSignModes)
+    
+    // Create client context with ALL required components
+    rps.clientCtx = client.Context{}.
+        WithClient(rpcClient).
+        WithChainID(rps.chainID).
+        WithCodec(globalCodec).
+        WithInterfaceRegistry(globalInterfaceRegistry).
+        WithTxConfig(txConfig).  // WICHTIG: TxConfig explizit setzen
+        WithLegacyAmino(codec.NewLegacyAmino()).
+        WithAccountRetriever(authtypes.AccountRetriever{})
+
+    // Create blockchain client
+    rps.blockchainClient = blockchain.NewClient(rps.clientCtx)
+    
+    log.Printf("✅ Blockchain client initialized for payment verification")
+    log.Printf("🔗 Connected to: %s (Chain: %s)", rps.rpcEndpoint, rps.chainID)
+    
+    return nil
 }
 
 // HTTP Handlers - ALLE ORIGINAL-HANDLER BEIBEHALTEN
