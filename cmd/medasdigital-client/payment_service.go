@@ -18,7 +18,6 @@ import (
 	
 	"github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth/tx"
     authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
     authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
     "github.com/cosmos/cosmos-sdk/codec"
