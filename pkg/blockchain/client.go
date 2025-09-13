@@ -487,10 +487,23 @@ func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAdd
 	}
 	
 	// 3. Parse transaction messages
-	tx, err := c.decodeTxFromAny(txResponse.TxResponse.Tx)
-	if err != nil {
-		return false, fmt.Errorf("failed to decode transaction: %w", err)
-	}
+	func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
+    // NULL-CHECKS hinzufügen
+    if txAny == nil {
+        return nil, fmt.Errorf("transaction data is nil")
+    }
+    
+    if txAny.Value == nil {
+        return nil, fmt.Errorf("transaction value is nil")
+    }
+    
+    if c.clientCtx.TxConfig == nil {
+        return nil, fmt.Errorf("TxConfig is not initialized")
+    }
+    
+    txBytes := txAny.Value
+    return c.clientCtx.TxConfig.TxDecoder()(txBytes)
+}
 	
 	// 4. Verify payment details
 	for _, msg := range tx.GetMsgs() {
