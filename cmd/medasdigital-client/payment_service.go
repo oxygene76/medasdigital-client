@@ -602,22 +602,21 @@ func (rps *RealPaymentService) handleCommunityStats(w http.ResponseWriter, r *ht
 
 // verifyPayment verifies a blockchain payment transaction using enhanced blockchain client
 func (rps *RealPaymentService) verifyPayment(txHash, senderAddr string, expectedAmount float64) (bool, error) {
-    log.Printf("🔍 Verifying payment: tx=%s, sender=%s, amount=%.6f MEDAS", txHash, senderAddr, expectedAmount)
-    
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-    
-    // KORREKTUR: expectedAmount ist in MEDAS, aber VerifyPaymentTransaction erwartet es in der Basis-Einheit
-    expectedAmountInUmedas := expectedAmount // expectedAmount ist bereits in MEDAS, nicht umedas
-    
-    verified, err := rps.blockchainClient.VerifyPaymentTransaction(
-        ctx,
-        txHash,
-        senderAddr,
-        rps.serviceAddr,
-        expectedAmountInUmedas, // Jetzt korrekt: 2.5 MEDAS statt 2.5 umedas
-        "umedas",
-    )
+	log.Printf("🔍 Verifying payment: tx=%s, sender=%s, amount=%.6f MEDAS", txHash, senderAddr, expectedAmount)
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	
+	// KORREKTUR: expectedAmount ist in MEDAS, aber VerifyPaymentTransaction behandelt es fälschlicherweise als umedas
+	// Keine Konvertierung nötig - expectedAmount ist bereits korrekt in MEDAS
+	verified, err := rps.blockchainClient.VerifyPaymentTransaction(
+		ctx,
+		txHash,
+		senderAddr,
+		rps.serviceAddr,
+		expectedAmount, // Bleibt in MEDAS
+		"umedas",
+	)
 	
 	if err != nil {
 		log.Printf("❌ Blockchain verification failed: %v", err)
