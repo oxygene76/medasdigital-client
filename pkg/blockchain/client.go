@@ -487,26 +487,17 @@ func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAdd
 	}
 	
 	// 3. Parse transaction messages
-	func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
-    // NULL-CHECKS hinzufügen
-    if txAny == nil {
-        return nil, fmt.Errorf("transaction data is nil")
-    }
-    
-    if txAny.Value == nil {
-        return nil, fmt.Errorf("transaction value is nil")
-    }
-    
-    if c.clientCtx.TxConfig == nil {
-        return nil, fmt.Errorf("TxConfig is not initialized")
-    }
-    
-    txBytes := txAny.Value
-    return c.clientCtx.TxConfig.TxDecoder()(txBytes)
-}
+	if txResponse.TxResponse.Tx == nil {
+		return false, fmt.Errorf("transaction data is nil")
+	}
+	
+	decodedTx, err := c.decodeTxFromAny(txResponse.TxResponse.Tx)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode transaction: %w", err)
+	}
 	
 	// 4. Verify payment details
-	for _, msg := range tx.GetMsgs() {
+	for _, msg := range decodedTx.GetMsgs() {
 		if bankMsg, ok := msg.(*banktypes.MsgSend); ok {
 			// Check sender address
 			if bankMsg.FromAddress != senderAddr {
@@ -541,7 +532,6 @@ func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAdd
 	
 	return false, fmt.Errorf("no valid payment found in transaction")
 }
-
 // GetTransactionConfirmations calculates the number of confirmations for a transaction
 func (c *Client) GetTransactionConfirmations(ctx context.Context, txHeight int64) (int64, error) {
 	// Get current blockchain status
@@ -630,6 +620,19 @@ func (c *Client) decodeTx(txBytes []byte) (sdk.Tx, error) {
 }
 
 func (c *Client) decodeTxFromAny(txAny *types.Any) (sdk.Tx, error) {
+    // NULL-CHECKS hinzufügen
+    if txAny == nil {
+        return nil, fmt.Errorf("transaction data is nil")
+    }
+    
+    if txAny.Value == nil {
+        return nil, fmt.Errorf("transaction value is nil")
+    }
+    
+    if c.clientCtx.TxConfig == nil {
+        return nil, fmt.Errorf("TxConfig is not initialized")
+    }
+    
     txBytes := txAny.Value
     return c.clientCtx.TxConfig.TxDecoder()(txBytes)
 }
