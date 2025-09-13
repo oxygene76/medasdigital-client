@@ -595,20 +595,22 @@ func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAdd
 			// Check amount and denomination
 			for _, coin := range bankMsg.Amount {
 				if coin.Denom == denom {
-					// Convert amount based on denomination
-					var actualAmount float64
-					if denom == "umedas" {
-						actualAmount = float64(coin.Amount.Int64()) / 1000000.0 // 6 decimals
-					} else {
-						actualAmount = float64(coin.Amount.Int64())
-					}
-					
-					// Allow small rounding differences (±0.1%)
-					tolerance := expectedAmount * 0.001
-					if actualAmount >= expectedAmount-tolerance && actualAmount <= expectedAmount+tolerance {
-						return true, nil
-					}
-				}
+        // Convert amount based on denomination
+        var actualAmount float64
+        if denom == "umedas" {
+            actualAmount = float64(coin.Amount.Int64()) / 1000000.0 // 6 decimals
+        		} else {
+            		actualAmount = float64(coin.Amount.Int64())
+       			 }
+        
+        			fmt.Printf("🔍 DEBUG: Found matching denom. Actual: %.6f MEDAS, Expected: %.6f MEDAS\n", actualAmount, expectedAmount) // KORREKTUR: beide in MEDAS
+        
+        			// WICHTIG: expectedAmount ist bereits in MEDAS, Vergleich ist korrekt
+        			tolerance := expectedAmount * 0.001
+        			if actualAmount >= expectedAmount-tolerance && actualAmount <= expectedAmount+tolerance {
+            			return true, nil
+        			}
+    			}
 			}
 		}
 	}
