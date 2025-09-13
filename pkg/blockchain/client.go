@@ -465,11 +465,94 @@ func (c *Client) QueryWithData(ctx context.Context, path string, data []byte) ([
 	return result, height, nil
 }
 
+
+func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAddr, recipientAddr string, expectedAmount float64, denom string) (bool, error) {
+    fmt.Printf("🔍 DEBUG: Looking for payment from %s to %s, expecting %.6f %s\n", senderAddr, recipientAddr, expectedAmount, denom)
+    
+    // 1. Query transaction by hash
+    txResponse, err := c.GetTx(ctx, txHash)
+    if err != nil {
+        return false, fmt.Errorf("failed to query transaction: %w", err)
+    }
+    
+    if txResponse.TxResponse == nil {
+        return false, fmt.Errorf("transaction not found")
+    }
+    
+    // 2. Check transaction success
+    if txResponse.TxResponse.Code != 0 {
+        return false, fmt.Errorf("transaction failed with code %d", txResponse.TxResponse.Code)
+    }
+    
+    // 3. Parse transaction messages
+    decodedTx, err := c.decodeTxFromAny(txResponse.TxResponse.Tx)
+    if err != nil {
+        return false, fmt.Errorf("failed to decode transaction: %w", err)
+    }
+    
+    // 4. Verify payment details
+    fmt.Printf("🔍 DEBUG: Transaction has %d messages\n", len(decodedTx.GetMsgs()))
+    
+    for i, msg := range decodedTx.GetMsgs() {
+        fmt.Printf("🔍 DEBUG: Message %d type: %T\n", i, msg)
+        
+        if bankMsg, ok := msg.(*banktypes.MsgSend); ok {
+            fmt.Printf("🔍 DEBUG: Found MsgSend: from=%s, to=%s\n", bankMsg.FromAddress, bankMsg.ToAddress)
+            
+            // Check sender address
+            if bankMsg.FromAddress != senderAddr {
+                fmt.Printf("🔍 DEBUG: Sender mismatch: expected=%s, actual=%s\n", senderAddr, bankMsg.FromAddress)
+                continue
+            }
+            
+            // Check recipient address
+            if bankMsg.ToAddress != recipientAddr {
+                fmt.Printf("🔍 DEBUG: Recipient mismatch: expected=%s, actual=%s\n", recipientAddr, bankMsg.ToAddress)
+                continue
+            }
+            
+            // Check amount and denomination
+            fmt.Printf("🔍 DEBUG: Message has %d coins\n", len(bankMsg.Amount))
+            
+            for j, coin := range bankMsg.Amount {
+                fmt.Printf("🔍 DEBUG: Coin %d: %s %s\n", j, coin.Amount, coin.Denom)
+                
+                if coin.Denom == denom {
+                    // Convert amount based on denomination
+                    var actualAmount float64
+                    if denom == "umedas" {
+                        actualAmount = float64(coin.Amount.Int64()) / 1000000.0 // 6 decimals
+                    } else {
+                        actualAmount = float64(coin.Amount.Int64())
+                    }
+                    
+                    fmt.Printf("🔍 DEBUG: Found matching denom. Actual: %.6f, Expected: %.6f\n", actualAmount, expectedAmount)
+                    
+                    // Allow small rounding differences (±0.1%)
+                    tolerance := expectedAmount * 0.001
+                    fmt.Printf("🔍 DEBUG: Tolerance: %.6f (range: %.6f - %.6f)\n", tolerance, expectedAmount-tolerance, expectedAmount+tolerance)
+                    
+                    if actualAmount >= expectedAmount-tolerance && actualAmount <= expectedAmount+tolerance {
+                        fmt.Printf("✅ DEBUG: Payment verified!\n")
+                        return true, nil
+                    } else {
+                        fmt.Printf("❌ DEBUG: Amount outside tolerance\n")
+                    }
+                }
+            }
+        }
+    }
+    
+    return false, fmt.Errorf("no valid payment found in transaction")
+}
+
 // ===================================
 // PAYMENT VERIFICATION METHODS (NEU)
 // ===================================
 
 // VerifyPaymentTransaction verifies a blockchain payment transaction
+
+/*
 func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAddr, recipientAddr string, expectedAmount float64, denom string) (bool, error) {
 	// 1. Query transaction by hash
 	txResponse, err := c.GetTx(ctx, txHash)
@@ -532,6 +615,9 @@ func (c *Client) VerifyPaymentTransaction(ctx context.Context, txHash, senderAdd
 	
 	return false, fmt.Errorf("no valid payment found in transaction")
 }
+
+*/
+
 // GetTransactionConfirmations calculates the number of confirmations for a transaction
 func (c *Client) GetTransactionConfirmations(ctx context.Context, txHeight int64) (int64, error) {
 	// Get current blockchain status
