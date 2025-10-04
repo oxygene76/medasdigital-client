@@ -76,6 +76,8 @@ var contractSubmitJobCmd = &cobra.Command{
     Use:   "submit-job",
     Short: "Submit computing job",
     RunE: func(cmd *cobra.Command, args []string) error {
+        cfg := loadConfig()  
+        
         contractAddr, _ := cmd.Flags().GetString("contract")
         clientKey, _ := cmd.Flags().GetString("from")
         jobType, _ := cmd.Flags().GetString("type")
