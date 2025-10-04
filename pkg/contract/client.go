@@ -168,7 +168,7 @@ func (c *Client) SubmitJob(
         "-y",
         "--node", c.config.RPCEndpoint,
         "--chain-id", c.config.ChainID,
-        "--output", "json",
+        
     }
     
     fmt.Println("=== DEBUG: TX Submit ===")
