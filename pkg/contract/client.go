@@ -251,8 +251,10 @@ func (c *Client) getJobIDFromTx(ctx context.Context, txHash string) (uint64, err
         return 0, fmt.Errorf("query tx failed: %w", err)
     }
     
+    fmt.Printf("DEBUG: Raw TX Query Response:\n%s\n", string(output))  // ← DEBUG
+    
     var txResp struct {
-        TxResponse struct {  // ← WICHTIG: Events sind unter tx_response, nicht logs
+        TxResponse struct {
             Events []struct {
                 Type       string `json:"type"`
                 Attributes []struct {
@@ -267,10 +269,15 @@ func (c *Client) getJobIDFromTx(ctx context.Context, txHash string) (uint64, err
         return 0, fmt.Errorf("parse tx failed: %w", err)
     }
     
-    // Suche in Events (nicht Logs!)
-    for _, event := range txResp.TxResponse.Events {
+    fmt.Printf("DEBUG: Number of events: %d\n", len(txResp.TxResponse.Events))  // ← DEBUG
+    
+    for i, event := range txResp.TxResponse.Events {
+        fmt.Printf("DEBUG: Event %d type: %s, attributes: %d\n", i, event.Type, len(event.Attributes))  // ← DEBUG
+        
         if event.Type == "wasm" {
             for _, attr := range event.Attributes {
+                fmt.Printf("DEBUG: Wasm attr - key: %s, value: %s\n", attr.Key, attr.Value)  // ← DEBUG
+                
                 if attr.Key == "job_id" {
                     return strconv.ParseUint(attr.Value, 10, 64)
                 }
@@ -280,7 +287,6 @@ func (c *Client) getJobIDFromTx(ctx context.Context, txHash string) (uint64, err
     
     return 0, fmt.Errorf("job_id not found in tx events")
 }
-
 // Helper functions
 func getPrice(p Provider, jobType string) float64 {
     if price, ok := p.Pricing[jobType]; ok {
