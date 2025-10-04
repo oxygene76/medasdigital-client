@@ -164,16 +164,12 @@ func (c *Client) SubmitJob(
         "--keyring-backend", c.keyringBackend,
         "--gas", "auto",
         "--gas-adjustment", "1.3",
-        "--gas-prices", "0.025umedas", 
+        "--gas-prices", "0.025umedas",
+        "--broadcast-mode", "sync",
         "-y",
         "--node", c.config.RPCEndpoint,
         "--chain-id", c.config.ChainID,
-        
     }
-    
-    fmt.Println("=== DEBUG: TX Submit ===")
-    fmt.Printf("Command: medasdigitald %s\n", strings.Join(args, " "))
-    fmt.Println("========================")
     
     cmd := exec.CommandContext(ctx, "medasdigitald", args...)
     
@@ -181,52 +177,36 @@ func (c *Client) SubmitJob(
     cmd.Stdout = &stdout
     cmd.Stderr = &stderr
     
-    fmt.Println("Executing command...")
-    
     if err := cmd.Run(); err != nil {
-        fmt.Println("\n❌ Command FAILED")
-        fmt.Printf("Error: %v\n", err)
-        fmt.Printf("\n--- STDOUT ---\n%s\n", stdout.String())
-        fmt.Printf("\n--- STDERR ---\n%s\n", stderr.String())
-        return 0, "", fmt.Errorf("submit failed: %w", err)
+        return 0, "", fmt.Errorf("submit failed: %w\nstderr: %s", err, stderr.String())
     }
     
-    fmt.Println("\n✅ Command SUCCESS")
-    fmt.Printf("\n--- STDOUT ---\n%s\n", stdout.String())
-    fmt.Printf("\n--- STDERR ---\n%s\n", stderr.String())
+    // Parse Text-Output für TX Hash
+    output := stdout.String()
+    var txHash string
     
-    var txResp struct {
-        TxHash string `json:"txhash"`
-        Code   int    `json:"code"`
-        RawLog string `json:"raw_log"`
+    lines := strings.Split(output, "\n")
+    for _, line := range lines {
+        if strings.HasPrefix(line, "txhash:") {
+            txHash = strings.TrimSpace(strings.TrimPrefix(line, "txhash:"))
+            break
+        }
     }
     
-    if err := json.Unmarshal(stdout.Bytes(), &txResp); err != nil {
-        fmt.Printf("Failed to parse JSON: %v\n", err)
-        return 0, "", fmt.Errorf("parse tx response failed: %w", err)
+    if txHash == "" {
+        return 0, "", fmt.Errorf("txhash not found in output:\n%s", output)
     }
     
-    fmt.Printf("\nParsed Response:\n")
-    fmt.Printf("  TX Hash: %s\n", txResp.TxHash)
-    fmt.Printf("  Code: %d\n", txResp.Code)
-    if txResp.RawLog != "" {
-        fmt.Printf("  Raw Log: %s\n", txResp.RawLog)
-    }
+    fmt.Printf("TX Hash: %s\n", txHash)
+    fmt.Println("Waiting for block inclusion...")
+    time.Sleep(10 * time.Second)
     
-    if txResp.Code != 0 {
-        return 0, txResp.TxHash, fmt.Errorf("tx failed with code %d: %s", txResp.Code, txResp.RawLog)
-    }
-    
-    fmt.Println("\nWaiting 8 seconds for block inclusion...")
-    time.Sleep(8 * time.Second)
-    
-    fmt.Println("Fetching job ID from TX...")
-    jobID, err := c.getJobIDFromTx(ctx, txResp.TxHash)
+    jobID, err := c.getJobIDFromTx(ctx, txHash)
     if err != nil {
-        return 0, txResp.TxHash, fmt.Errorf("get job_id failed: %w", err)
+        return 0, txHash, fmt.Errorf("get job_id failed: %w", err)
     }
     
-    return jobID, txResp.TxHash, nil
+    return jobID, txHash, nil
 }
 
 // WaitForCompletion wartet auf Job-Completion
