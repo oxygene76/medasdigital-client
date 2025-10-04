@@ -1,7 +1,5 @@
 package contract
 
-import "time"
-
 // Config für Contract-Interaktion
 type Config struct {
     ContractAddress string
