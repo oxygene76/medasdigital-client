@@ -26,7 +26,7 @@ var contractListProvidersCmd = &cobra.Command{
             ContractAddress: contractAddr,
             RPCEndpoint:     defaultRPCEndpoint,
             ChainID:         defaultChainID,
-        }, "", "") 
+        }, "", "", "") 
         
         providers, err := client.ListProviders(context.Background())
         if err != nil {
@@ -105,7 +105,7 @@ var contractSubmitJobCmd = &cobra.Command{
             ContractAddress: contractAddr,
             RPCEndpoint:     defaultRPCEndpoint,
             ChainID:         defaultChainID,
-        }, clientKey, clientAddrStr)
+        }, clientKey, clientAddrStr, cfg.Client.KeyringBackend)  
         
         fmt.Println("Finding best provider...")
         
@@ -168,7 +168,7 @@ var contractGetJobCmd = &cobra.Command{
             ContractAddress: contractAddr,
             RPCEndpoint:     defaultRPCEndpoint,
             ChainID:         defaultChainID,
-        }, "", "") 
+        }, "", "", "") 
         
         job, err := client.GetJob(context.Background(), jobID)
         if err != nil {
