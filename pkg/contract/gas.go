@@ -14,19 +14,11 @@ func EstimateGas(
     ctx context.Context,
     contractAddr string,
     msg string,
-    fromAddr string, 
+    fromAddr string,
     amount string,
     rpcEndpoint string,
     chainID string,
 ) (*GasEstimation, error) {
-    
-    // Erst Adresse vom Key holen
-    addrCmd := exec.CommandContext(ctx, "medasdigitald", "keys", "show", fromKey, "-a")
-    addrOutput, err := addrCmd.Output()
-    if err != nil {
-        return nil, fmt.Errorf("failed to get address from key: %w", err)
-    }
-    fromAddr := strings.TrimSpace(string(addrOutput))
     
     args := []string{
         "tx", "wasm", "execute",
@@ -34,9 +26,11 @@ func EstimateGas(
         "--from", fromAddr,
         "--gas", "auto",
         "--gas-adjustment", "1.3",
-        "--dry-run",
-        "--node", rpcEndpoint,
+        "--generate-only",
+        "--offline",
         "--chain-id", chainID,
+        "--account-number", "0",
+        "--sequence", "0",
         "--output", "json",
     }
     
@@ -52,18 +46,19 @@ func EstimateGas(
     }
     
     var result struct {
-        GasInfo struct {
-            GasWanted string `json:"gas_wanted"`
-            GasUsed   string `json:"gas_used"`
-        } `json:"gas_info"`
+        AuthInfo struct {
+            Fee struct {
+                GasLimit string `json:"gas_limit"`
+            } `json:"fee"`
+        } `json:"auth_info"`
     }
     
     if err := json.Unmarshal(output, &result); err != nil {
         return nil, fmt.Errorf("parse gas estimation: %w", err)
     }
     
-    gasWanted, _ := strconv.ParseUint(result.GasInfo.GasWanted, 10, 64)
-    gasUsed, _ := strconv.ParseUint(result.GasInfo.GasUsed, 10, 64)
+    gasWanted, _ := strconv.ParseUint(result.AuthInfo.Fee.GasLimit, 10, 64)
+    gasUsed := uint64(float64(gasWanted) / 1.3)
     
     feePerGas := 0.025
     totalFee := uint64(float64(gasWanted) * feePerGas)
