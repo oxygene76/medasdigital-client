@@ -1,6 +1,7 @@
 package contract
 
 import (
+    "bytes"
     "context"
     "encoding/json"
     "fmt"
