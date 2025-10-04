@@ -26,11 +26,9 @@ func EstimateGas(
         "--from", fromAddr,
         "--gas", "auto",
         "--gas-adjustment", "1.3",
-        "--generate-only",
-        "--offline",
+        "--node", rpcEndpoint,      // ← NEU
         "--chain-id", chainID,
-        "--account-number", "0",
-        "--sequence", "0",
+        "--simulate",               // ← NEU (statt generate-only + offline)
         "--output", "json",
     }
     
@@ -46,19 +44,18 @@ func EstimateGas(
     }
     
     var result struct {
-        AuthInfo struct {
-            Fee struct {
-                GasLimit string `json:"gas_limit"`
-            } `json:"fee"`
-        } `json:"auth_info"`
+        GasInfo struct {
+            GasWanted string `json:"gas_wanted"`
+            GasUsed   string `json:"gas_used"`
+        } `json:"gas_info"`
     }
     
     if err := json.Unmarshal(output, &result); err != nil {
         return nil, fmt.Errorf("parse gas estimation: %w", err)
     }
     
-    gasWanted, _ := strconv.ParseUint(result.AuthInfo.Fee.GasLimit, 10, 64)
-    gasUsed := uint64(float64(gasWanted) / 1.3)
+    gasWanted, _ := strconv.ParseUint(result.GasInfo.GasWanted, 10, 64)
+    gasUsed, _ := strconv.ParseUint(result.GasInfo.GasUsed, 10, 64)
     
     feePerGas := 0.025
     totalFee := uint64(float64(gasWanted) * feePerGas)
