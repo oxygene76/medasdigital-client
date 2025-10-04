@@ -134,6 +134,7 @@ func (c *Client) SubmitJob(
         c.config.ContractAddress, msg,
         "--amount", paymentAmount,
         "--from", c.clientKey,
+        "--broadcast-mode", "direct",
         "--keyring-backend", c.keyringBackend,
         "--gas", "auto",
         "--gas-adjustment", "1.3",
