@@ -55,7 +55,7 @@ func NewProviderNode(
         minBalance:      minBalance,
         maxBalance:      maxBalance,
         harvestInterval: time.Duration(harvestIntervalHours) * time.Hour,
-        jobManager:      compute.NewJobManager(workers, 100, nil), // ← ÄNDERN: maxJobs=100, kein PricingManager
+        jobManager: compute.NewJobManager(workers, 100, compute.NewPricingManager()),
     }
 }
 
