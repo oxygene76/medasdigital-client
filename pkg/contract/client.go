@@ -19,11 +19,11 @@ type Client struct {
     keyringBackend string
 }
 
-func NewClient(config Config, clientKey string, clientAddr string) *Client {
+func NewClient(config Config, clientKey string, clientAddr string, keyringBackend string) *Client {
     return &Client{
-        config:     config,
-        clientKey:  clientKey,
-        clientAddr: clientAddr,
+        config:         config,
+        clientKey:      clientKey,
+        clientAddr:     clientAddr,
         keyringBackend: keyringBackend,
     }
 }
