@@ -138,7 +138,6 @@ func (c *Client) SubmitJob(
         "--gas", "auto",
         "--broadcast-mode", "sync",  
         "--gas-adjustment", "1.3",
-        "--fees", "6000umedas",
         "-y",
         "--node", c.config.RPCEndpoint,
         "--chain-id", c.config.ChainID,
