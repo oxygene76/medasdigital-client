@@ -18,21 +18,23 @@ var contractCmd = &cobra.Command{
 
 var contractListProvidersCmd = &cobra.Command{
     Use:   "list-providers",
-    Short: "List all available providers",
+    Short: "List available providers",
     RunE: func(cmd *cobra.Command, args []string) error {
+        cfg := loadConfig()  // ← HINZUFÜGEN
+        
         contractAddr, _ := cmd.Flags().GetString("contract")
         
         client := contract.NewClient(contract.Config{
             ContractAddress: contractAddr,
-            RPCEndpoint:     defaultRPCEndpoint,
-            ChainID:         defaultChainID,
-        }, "", "", "") 
+            RPCEndpoint:     cfg.Chain.RPCEndpoint,
+            ChainID:         cfg.Chain.ID,
+        }, "", "", "")  // Leer bei Queries
         
         providers, err := client.ListProviders(context.Background())
         if err != nil {
             return err
         }
-        
+              
         if len(providers) == 0 {
             fmt.Println("No providers registered")
             return nil
@@ -161,13 +163,15 @@ var contractGetJobCmd = &cobra.Command{
     Use:   "get-job",
     Short: "Get job status",
     RunE: func(cmd *cobra.Command, args []string) error {
+        cfg := loadConfig()  // ← HINZUFÜGEN
+        
         contractAddr, _ := cmd.Flags().GetString("contract")
         jobID, _ := cmd.Flags().GetUint64("job-id")
         
         client := contract.NewClient(contract.Config{
             ContractAddress: contractAddr,
-            RPCEndpoint:     defaultRPCEndpoint,
-            ChainID:         defaultChainID,
+            RPCEndpoint:     cfg.Chain.RPCEndpoint,
+            ChainID:         cfg.Chain.ID,
         }, "", "", "") 
         
         job, err := client.GetJob(context.Background(), jobID)
