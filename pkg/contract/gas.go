@@ -37,7 +37,7 @@ func EstimateGas(
     cmd1 := exec.CommandContext(ctx, "medasdigitald", args1...)
     unsignedTx, err := cmd1.Output()
     if err != nil {
-        return nil, fmt.Errorf("generate tx failed: %w, output: %s", err, unsignedTx)
+        return nil, fmt.Errorf("generate tx failed: %w", err)
     }
     
     // Step 2: Write to temp file
@@ -58,13 +58,12 @@ func EstimateGas(
     
     output, err := cmd2.Output()
     if err != nil {
-        return nil, fmt.Errorf("simulate failed: %w, output: %s", err, output)
+        return nil, fmt.Errorf("simulate failed: %w", err)
     }
     
     var result struct {
         GasInfo struct {
-            GasWanted string `json:"gas_wanted"`
-            GasUsed   string `json:"gas_used"`
+            GasUsed string `json:"gas_used"`
         } `json:"gas_info"`
     }
     
@@ -72,11 +71,10 @@ func EstimateGas(
         return nil, fmt.Errorf("parse simulation: %w", err)
     }
     
-    gasWanted, _ := strconv.ParseUint(result.GasInfo.GasWanted, 10, 64)
     gasUsed, _ := strconv.ParseUint(result.GasInfo.GasUsed, 10, 64)
     
-    // Apply gas adjustment
-    gasWanted = uint64(float64(gasWanted) * 1.3)
+    // Apply 30% buffer (gas_wanted ignorieren da overflow)
+    gasWanted := uint64(float64(gasUsed) * 1.3)
     
     feePerGas := 0.025
     totalFee := uint64(float64(gasWanted) * feePerGas)
