@@ -1392,6 +1392,17 @@ func loadConfig() *Config {
 	if config.Client.KeyringBackend == "" {
 		config.Client.KeyringBackend = "test" // Safe default
 	}
+
+	config.Provider.Enabled = viper.GetBool("provider.enabled")
+    config.Provider.KeyName = viper.GetString("provider.key_name")
+    config.Provider.KeyringBackend = viper.GetString("provider.keyring_backend")
+    config.Provider.FundingAddress = viper.GetString("provider.funding_address")
+    config.Provider.MinBalance = viper.GetUint64("provider.min_balance")
+    config.Provider.MaxBalance = viper.GetUint64("provider.max_balance")
+    config.Provider.Endpoint = viper.GetString("provider.endpoint")
+    config.Provider.Port = viper.GetInt("provider.port")
+    config.Provider.Workers = viper.GetInt("provider.workers")
+    config.Provider.HarvestIntervalHours = viper.GetInt("provider.harvest_interval_hours")
 	
 	return config
 }
