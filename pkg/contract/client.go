@@ -224,7 +224,7 @@ func (c *Client) SubmitJob(
             fmt.Print(".")
         }
     }    
-
+}
 // WaitForCompletion wartet auf Job-Completion
 func (c *Client) WaitForCompletion(ctx context.Context, jobID uint64, timeout time.Duration) (*ContractJob, error) {
     deadline := time.Now().Add(timeout)
