@@ -19,10 +19,18 @@ func EstimateGas(
     chainID string,
 ) (*GasEstimation, error) {
     
+    // NEU: Erst Adresse vom Key holen
+    addrCmd := exec.CommandContext(ctx, "medasdigitald", "keys", "show", fromKey, "-a")
+    addrOutput, err := addrCmd.Output()
+    if err != nil {
+        return nil, fmt.Errorf("failed to get address from key: %w", err)
+    }
+    fromAddr := strings.TrimSpace(string(addrOutput))
+    
     args := []string{
         "tx", "wasm", "execute",
         contractAddr, msg,
-        "--from", fromKey,
+        "--from", fromAddr,  // ← Adresse statt Key-Name!
         "--gas", "auto",
         "--gas-adjustment", "1.3",
         "--dry-run",
@@ -40,17 +48,6 @@ func EstimateGas(
     output, err := cmd.Output()
     if err != nil {
         return nil, fmt.Errorf("gas estimation failed: %w, output: %s", err, output)
-    }
-    
-    var result struct {
-        GasInfo struct {
-            GasWanted string `json:"gas_wanted"`
-            GasUsed   string `json:"gas_used"`
-        } `json:"gas_info"`
-    }
-    
-    if err := json.Unmarshal(output, &result); err != nil {
-        return nil, fmt.Errorf("parse gas estimation: %w", err)
     }
     
     gasWanted, _ := strconv.ParseUint(result.GasInfo.GasWanted, 10, 64)
