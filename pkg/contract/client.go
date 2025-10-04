@@ -28,6 +28,33 @@ func NewClient(config Config, clientKey string, clientAddr string, keyringBacken
     }
 }
 
+
+// GetJob holt Job-Details
+func (c *Client) GetJob(ctx context.Context, jobID uint64) (*ContractJob, error) {
+    query := fmt.Sprintf(`{"get_job":{"job_id":%d}}`, jobID)
+    
+    cmd := exec.CommandContext(ctx,
+        "medasdigitald", "query", "wasm", "contract-state", "smart",
+        c.config.ContractAddress, query,
+        "--node", c.config.RPCEndpoint,
+        "--output", "json",
+    )
+    
+    output, err := cmd.Output()
+    if err != nil {
+        return nil, fmt.Errorf("query failed: %w", err)
+    }
+    
+    var result struct {
+        Data ContractJob `json:"data"`
+    }
+    
+    if err := json.Unmarshal(output, &result); err != nil {
+        return nil, err
+    }
+    
+    return &result.Data, nil
+}
 // ListProviders holt alle Provider vom Contract
 func (c *Client) ListProviders(ctx context.Context) ([]Provider, error) {
     query := `{"list_providers":{}}`
