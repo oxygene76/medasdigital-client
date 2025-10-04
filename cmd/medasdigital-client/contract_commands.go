@@ -171,6 +171,75 @@ var contractGetJobCmd = &cobra.Command{
         return nil
     },
 }
+var providerNodeCmd = &cobra.Command{
+    Use:   "provider-node",
+    Short: "Start provider node for contract jobs",
+    Long:  "Listen for jobs from smart contract and process them",
+    RunE: func(cmd *cobra.Command, args []string) error {
+        contractAddr, _ := cmd.Flags().GetString("contract")
+        providerKey, _ := cmd.Flags().GetString("provider-key")
+        providerName, _ := cmd.Flags().GetString("name")
+        endpoint, _ := cmd.Flags().GetString("endpoint")
+        httpPort, _ := cmd.Flags().GetInt("port")
+        workers, _ := cmd.Flags().GetInt("workers")
+        register, _ := cmd.Flags().GetBool("register")
+        
+        if contractAddr == "" || providerKey == "" || endpoint == "" {
+            return fmt.Errorf("contract, provider-key, and endpoint are required")
+        }
+        
+        // Get provider address from keyring
+        providerAddr, err := getProviderAddressFromKey(providerKey)
+        if err != nil {
+            return fmt.Errorf("failed to get provider address: %w", err)
+        }
+        
+        node := contract.NewProviderNode(
+            contractAddr,
+            providerAddr,
+            providerKey,
+            defaultRPCEndpoint,
+            defaultChainID,
+            providerName,
+            endpoint,
+            httpPort,
+            workers,
+        )
+        
+        if register {
+            fmt.Println("Registering provider...")
+            if err := node.RegisterProvider(endpoint); err != nil {
+                return fmt.Errorf("registration failed: %w", err)
+            }
+            fmt.Println("Provider registered successfully")
+        }
+        
+        ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+        defer cancel()
+        
+        fmt.Println("Starting provider node...")
+        return node.Start(ctx)
+    },
+}
+
+func getProviderAddressFromKey(keyName string) (string, error) {
+    clientCtx, err := initKeysClientContext()
+    if err != nil {
+        return "", err
+    }
+    
+    keyInfo, err := clientCtx.Keyring.Key(keyName)
+    if err != nil {
+        return "", err
+    }
+    
+    addr, err := keyInfo.GetAddress()
+    if err != nil {
+        return "", err
+    }
+    
+    return addr.String(), nil
+}
 
 func init() {
     rootCmd.AddCommand(contractCmd)
@@ -193,4 +262,14 @@ func init() {
     
     contractGetJobCmd.Flags().Uint64("job-id", 0, "Job ID (required)")
     contractGetJobCmd.MarkFlagRequired("job-id")
+
+    contractProviderNodeCmd.Flags().String("provider-key", "", "Provider key name (required)")
+    contractProviderNodeCmd.Flags().String("name", "MEDAS Provider", "Provider name")
+    contractProviderNodeCmd.Flags().String("endpoint", "", "Provider endpoint URL (required)")
+    contractProviderNodeCmd.Flags().Int("port", 8080, "HTTP port")
+    contractProviderNodeCmd.Flags().Int("workers", 4, "Worker threads")
+    contractProviderNodeCmd.Flags().Bool("register", false, "Register provider first")
+    
+    contractProviderNodeCmd.MarkFlagRequired("provider-key")
+    contractProviderNodeCmd.MarkFlagRequired("endpoint")
 }
