@@ -332,15 +332,15 @@ func init() {
     contractGetJobCmd.Flags().Uint64("job-id", 0, "Job ID (required)")
     contractGetJobCmd.MarkFlagRequired("job-id")
 
-    #contractProviderNodeCmd.Flags().String("provider-key", "", "Provider key name (required)")
-    #contractProviderNodeCmd.Flags().String("name", "MEDAS Provider", "Provider name")
-    #contractProviderNodeCmd.Flags().String("endpoint", "", "Provider endpoint URL (required)")
-    #contractProviderNodeCmd.Flags().Int("port", 8080, "HTTP port")
-    #contractProviderNodeCmd.Flags().Int("workers", 4, "Worker threads")
-    #contractProviderNodeCmd.Flags().Bool("register", false, "Register provider first")
+    // contractProviderNodeCmd.Flags().String("provider-key", "", "Provider key name (required)")
+    // contractProviderNodeCmd.Flags().String("name", "MEDAS Provider", "Provider name")
+    // contractProviderNodeCmd.Flags().String("endpoint", "", "Provider endpoint URL (required)")
+    // contractProviderNodeCmd.Flags().Int("port", 8080, "HTTP port")
+    // contractProviderNodeCmd.Flags().Int("workers", 4, "Worker threads")
+    // contractProviderNodeCmd.Flags().Bool("register", false, "Register provider first")
     
-    #contractProviderNodeCmd.MarkFlagRequired("provider-key")
-    #contractProviderNodeCmd.MarkFlagRequired("endpoint")
+    // contractProviderNodeCmd.MarkFlagRequired("provider-key")
+    // contractProviderNodeCmd.MarkFlagRequired("endpoint")
 
     contractProviderNodeCmd.Flags().Bool("register", false, "Register provider first")
 }
