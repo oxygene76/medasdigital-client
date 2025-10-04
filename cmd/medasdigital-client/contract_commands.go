@@ -84,11 +84,27 @@ var contractSubmitJobCmd = &cobra.Command{
         payment, _ := cmd.Flags().GetString("payment")
         simulate, _ := cmd.Flags().GetBool("simulate")
         
+        // NEU: Adresse vom Keyring holen
+        clientCtx, err := initKeysClientContext()
+        if err != nil {
+            return fmt.Errorf("failed to init keyring: %w", err)
+        }
+        
+        keyInfo, err := clientCtx.Keyring.Key(clientKey)
+        if err != nil {
+            return fmt.Errorf("key not found: %w", err)
+        }
+        
+        clientAddr, err := keyInfo.GetAddress()
+        if err != nil {
+            return fmt.Errorf("failed to get address: %w", err)
+        }
+        
         client := contract.NewClient(contract.Config{
             ContractAddress: contractAddr,
             RPCEndpoint:     defaultRPCEndpoint,
             ChainID:         defaultChainID,
-        }, clientKey)
+        }, clientKey, clientAddr.String()) // ← Adresse mitgeben
         
         fmt.Println("Finding best provider...")
         
