@@ -864,6 +864,7 @@ func init() {
 	rootCmd.AddCommand(queryCmd)
 	// Computing Commands (vollständig)
 	rootCmd.AddCommand(realPaymentServiceCmd)  // Payment Service
+	rootCmd.AddCommand(contractCmd)            // contract submit-job, list-providers, etc.
 	rootCmd.AddCommand(serveCmd)               // Kostenloser Test Service  
 	rootCmd.AddCommand(piCmd)   
     
