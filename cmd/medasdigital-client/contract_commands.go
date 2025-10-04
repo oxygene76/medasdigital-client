@@ -27,7 +27,7 @@ var contractListProvidersCmd = &cobra.Command{
             ContractAddress: contractAddr,
             RPCEndpoint:     defaultRPCEndpoint,
             ChainID:         defaultChainID,
-        }, "")
+        }, "", "") 
         
         providers, err := client.ListProviders(context.Background())
         if err != nil {
@@ -169,7 +169,7 @@ var contractGetJobCmd = &cobra.Command{
             ContractAddress: contractAddr,
             RPCEndpoint:     defaultRPCEndpoint,
             ChainID:         defaultChainID,
-        }, "")
+        }, "", "") 
         
         job, err := client.GetJob(context.Background(), jobID)
         if err != nil {
