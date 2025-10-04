@@ -6,6 +6,7 @@ import (
     "fmt"
     "os/exec"
     "strconv"
+    "strings"
 )
 
 // EstimateGas führt Gas-Simulation durch
