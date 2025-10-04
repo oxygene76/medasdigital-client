@@ -134,7 +134,6 @@ func (c *Client) SubmitJob(
         c.config.ContractAddress, msg,
         "--amount", paymentAmount,
         "--from", c.clientKey,
-        "--broadcast-mode", "sync",
         "--keyring-backend", c.keyringBackend,
         "--gas", "auto",
         "--gas-adjustment", "1.3",
@@ -142,7 +141,6 @@ func (c *Client) SubmitJob(
         "-y",
         "--node", c.config.RPCEndpoint,
         "--chain-id", c.config.ChainID,
-        "--output", "json",
     )
     
     var stdout, stderr bytes.Buffer
