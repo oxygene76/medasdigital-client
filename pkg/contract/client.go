@@ -198,32 +198,32 @@ func (c *Client) SubmitJob(
     }
     
    fmt.Printf("TX Hash: %s\n", txHash)
-fmt.Println("Waiting for TX to be included in block...")
+   fmt.Println("Waiting for TX to be included in block...")
 
-var jobID uint64
-var err error
+    var jobID uint64
+    var err error
 
-// Polling mit Timeout (max 60 Sekunden)
-timeout := time.After(60 * time.Second)
-ticker := time.NewTicker(1 * time.Second)
-defer ticker.Stop()
+    // Polling mit Timeout (max 60 Sekunden)
+    timeout := time.After(60 * time.Second)
+    ticker := time.NewTicker(1 * time.Second)
+    defer ticker.Stop()
 
-for {
-    select {
-    case <-timeout:
-        return 0, txHash, fmt.Errorf("timeout waiting for TX to be included in block")
+    for {
+        select {
+        case <-timeout:
+            return 0, txHash, fmt.Errorf("timeout waiting for TX to be included in block")
     
-    case <-ticker.C:
-        jobID, err = c.getJobIDFromTx(ctx, txHash)
-        if err == nil {
-            // Erfolgreich gefunden
-            return jobID, txHash, nil
-        }
+        case <-ticker.C:
+            jobID, err = c.getJobIDFromTx(ctx, txHash)
+            if err == nil {
+                // Erfolgreich gefunden
+                return jobID, txHash, nil
+            }
         
-        // TX noch nicht im Block, weiter pollen
-        fmt.Print(".")
-    }
-}    
+            // TX noch nicht im Block, weiter pollen
+            fmt.Print(".")
+        }
+    }    
 
 // WaitForCompletion wartet auf Job-Completion
 func (c *Client) WaitForCompletion(ctx context.Context, jobID uint64, timeout time.Duration) (*ContractJob, error) {
