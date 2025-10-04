@@ -146,7 +146,7 @@ var stdout, stderr bytes.Buffer
 cmd.Stdout = &stdout
 cmd.Stderr = &stderr
 
-err := cmd.Run()
+err = cmd.Run()
 if err != nil {
     return 0, "", fmt.Errorf("submit failed: %w\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
 }
