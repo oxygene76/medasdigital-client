@@ -81,22 +81,34 @@ type ChainStatus struct {
 
 // Config represents the application configuration
 type Config struct {
-	Chain struct {
-		ID           string `yaml:"chain_id"`
-		RPCEndpoint  string `yaml:"rpc_endpoint"`
-		Bech32Prefix string `yaml:"bech32_prefix"`
-		BaseDenom    string `yaml:"base_denom"` 
-	} `yaml:"chain"`
-	Client struct {
-		KeyringDir     string   `yaml:"keyring_dir"`
-		KeyringBackend string   `yaml:"keyring_backend"`  // ← NEU HINZUFÜGEN
-		Capabilities   []string `yaml:"capabilities"`
-	} `yaml:"client"`
-	GPU struct {
-		Enabled     bool `yaml:"enabled"`
-		DeviceID    int  `yaml:"device_id"`
-		MemoryLimit int  `yaml:"memory_limit"`
-	} `yaml:"gpu"`
+    Chain struct {
+        ID           string `yaml:"chain_id"`
+        RPCEndpoint  string `yaml:"rpc_endpoint"`
+        Bech32Prefix string `yaml:"bech32_prefix"`
+        BaseDenom    string `yaml:"base_denom"`
+    } `yaml:"chain"`
+    Client struct {
+        KeyringDir     string   `yaml:"keyring_dir"`
+        KeyringBackend string   `yaml:"keyring_backend"`
+        Capabilities   []string `yaml:"capabilities"`
+    } `yaml:"client"`
+    Provider struct {  // ← NEU HINZUFÜGEN
+        Enabled              bool   `yaml:"enabled"`
+        KeyName              string `yaml:"key_name"`
+        KeyringBackend       string `yaml:"keyring_backend"`
+        FundingAddress       string `yaml:"funding_address"`
+        MinBalance           uint64 `yaml:"min_balance"`
+        MaxBalance           uint64 `yaml:"max_balance"`
+        Endpoint             string `yaml:"endpoint"`
+        Port                 int    `yaml:"port"`
+        Workers              int    `yaml:"workers"`
+        HarvestIntervalHours int    `yaml:"harvest_interval_hours"`
+    } `yaml:"provider"`
+    GPU struct {
+        Enabled     bool `yaml:"enabled"`
+        DeviceID    int  `yaml:"device_id"`
+        MemoryLimit int  `yaml:"memory_limit"`
+    } `yaml:"gpu"`
 }
 
 // rootCmd represents the base command when called without any subcommands
@@ -166,6 +178,29 @@ config := &Config{
 			KeyringBackend: "test",  // ← NEU HINZUFÜGEN
 			Capabilities:   []string{"orbital_dynamics", "photometric_analysis"},
 		},
+			 Provider: struct {
+                Enabled              bool   `yaml:"enabled"`
+                KeyName              string `yaml:"key_name"`
+                KeyringBackend       string `yaml:"keyring_backend"`
+                FundingAddress       string `yaml:"funding_address"`
+                MinBalance           uint64 `yaml:"min_balance"`
+                MaxBalance           uint64 `yaml:"max_balance"`
+                Endpoint             string `yaml:"endpoint"`
+                Port                 int    `yaml:"port"`
+                Workers              int    `yaml:"workers"`
+                HarvestIntervalHours int    `yaml:"harvest_interval_hours"`
+            }{
+                Enabled:              false,
+                KeyName:              "my-provider",
+                KeyringBackend:       "test",
+                FundingAddress:       "",
+                MinBalance:           50000000,
+                MaxBalance:           100000000,
+                Endpoint:             "https://localhost:8080",
+                Port:                 8080,
+                Workers:              4,
+                HarvestIntervalHours: 1,
+            },
 			GPU: struct {
 				Enabled     bool `yaml:"enabled"`
 				DeviceID    int  `yaml:"device_id"`
