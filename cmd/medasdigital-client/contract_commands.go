@@ -3,8 +3,7 @@ package main
 import (
     "context"
     "fmt"
-    "os"
-    "os/signal"
+    "os/exec"
     "strings"
     "time"
     
@@ -199,13 +198,10 @@ var contractProviderNodeCmd = &cobra.Command{
         register, _ := cmd.Flags().GetBool("register")
         
         // Load config
-        cfg, err := loadConfig()
-        if err != nil {
-            return fmt.Errorf("failed to load config: %w", err)
-        }
+        cfg := loadConfig()
         
         if !cfg.Provider.Enabled {
-            return fmt.Errorf("provider not enabled in config. Set provider.enabled: true in %s", cfgFile)
+            return fmt.Errorf("provider not enabled in config. Set provider.enabled: true")
         }
         
         if cfg.Provider.FundingAddress == "" {
@@ -219,23 +215,22 @@ var contractProviderNodeCmd = &cobra.Command{
         )
         addrOutput, err := addrCmd.Output()
         if err != nil {
-            return fmt.Errorf("failed to get provider address: %w\nDid you create the key? Run: medasdigitald keys add %s --keyring-backend %s", 
-                err, cfg.Provider.KeyName, cfg.Provider.KeyringBackend)
+            return fmt.Errorf("failed to get provider address: %w", err)
         }
         providerAddr := strings.TrimSpace(string(addrOutput))
         
         fmt.Printf("Provider Address: %s\n", providerAddr)
         
-        // Register if requested
         if register {
             fmt.Println("Registering provider...")
             if err := registerProvider(cfg, contractAddr, providerAddr); err != nil {
                 return fmt.Errorf("registration failed: %w", err)
             }
             fmt.Println("✅ Provider registered")
+            time.Sleep(5 * time.Second)
         }
         
-        // Create and start provider node
+        // Create provider node with config values
         node := contract.NewProviderNode(
             contractAddr,
             providerAddr,
@@ -252,8 +247,7 @@ var contractProviderNodeCmd = &cobra.Command{
             cfg.Provider.HarvestIntervalHours,
         )
         
-        ctx := context.Background()
-        return node.Start(ctx)
+        return node.Start(context.Background())
     },
 }
 
@@ -274,6 +268,45 @@ func getProviderAddressFromKey(keyName string) (string, error) {
     }
     
     return addr.String(), nil
+}
+
+func registerProvider(cfg *Config, contractAddr, providerAddr string) error {
+    msg := fmt.Sprintf(`{
+        "register_provider": {
+            "name": "MEDAS Provider Node",
+            "capabilities": [{
+                "service_type": "pi_calculation",
+                "max_complexity": 100000,
+                "avg_completion_time": 180
+            }],
+            "pricing": {
+                "pi_calculation": {
+                    "base_price": "0.0001",
+                    "unit": "digit"
+                }
+            },
+            "endpoint": "%s"
+        }
+    }`, cfg.Provider.Endpoint)
+    
+    cmd := exec.Command(
+        "medasdigitald", "tx", "wasm", "execute",
+        contractAddr, msg,
+        "--from", cfg.Provider.KeyName,
+        "--keyring-backend", cfg.Provider.KeyringBackend,
+        "--gas", "300000",
+        "--fees", "80000umedas",
+        "--node", cfg.Chain.RPCEndpoint,
+        "--chain-id", cfg.Chain.ID,
+        "-y",
+    )
+    
+    output, err := cmd.CombinedOutput()
+    if err != nil {
+        return fmt.Errorf("%w\noutput: %s", err, output)
+    }
+    
+    return nil
 }
 
 func init() {
@@ -299,13 +332,15 @@ func init() {
     contractGetJobCmd.Flags().Uint64("job-id", 0, "Job ID (required)")
     contractGetJobCmd.MarkFlagRequired("job-id")
 
-    contractProviderNodeCmd.Flags().String("provider-key", "", "Provider key name (required)")
-    contractProviderNodeCmd.Flags().String("name", "MEDAS Provider", "Provider name")
-    contractProviderNodeCmd.Flags().String("endpoint", "", "Provider endpoint URL (required)")
-    contractProviderNodeCmd.Flags().Int("port", 8080, "HTTP port")
-    contractProviderNodeCmd.Flags().Int("workers", 4, "Worker threads")
-    contractProviderNodeCmd.Flags().Bool("register", false, "Register provider first")
+    #contractProviderNodeCmd.Flags().String("provider-key", "", "Provider key name (required)")
+    #contractProviderNodeCmd.Flags().String("name", "MEDAS Provider", "Provider name")
+    #contractProviderNodeCmd.Flags().String("endpoint", "", "Provider endpoint URL (required)")
+    #contractProviderNodeCmd.Flags().Int("port", 8080, "HTTP port")
+    #contractProviderNodeCmd.Flags().Int("workers", 4, "Worker threads")
+    #contractProviderNodeCmd.Flags().Bool("register", false, "Register provider first")
     
-    contractProviderNodeCmd.MarkFlagRequired("provider-key")
-    contractProviderNodeCmd.MarkFlagRequired("endpoint")
+    #contractProviderNodeCmd.MarkFlagRequired("provider-key")
+    #contractProviderNodeCmd.MarkFlagRequired("endpoint")
+
+    contractProviderNodeCmd.Flags().Bool("register", false, "Register provider first")
 }
