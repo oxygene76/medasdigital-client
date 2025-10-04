@@ -187,6 +187,8 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
         p.providerAddr,
     )
     
+    log.Printf("🔍 Subscribing with query: %s", query)
+    
     subscribeMsg := map[string]interface{}{
         "jsonrpc": "2.0",
         "method":  "subscribe",
@@ -200,6 +202,8 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
         return fmt.Errorf("subscribe failed: %w", err)
     }
     
+    log.Printf("✅ WebSocket connected and subscribed")
+    
     for {
         select {
         case <-ctx.Done():
@@ -211,19 +215,28 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
                 continue
             }
             
+            // DEBUG: Print raw message
+            msgJSON, _ := json.MarshalIndent(msg, "", "  ")
+            log.Printf("📨 Raw WebSocket message:\n%s", string(msgJSON))
+            
             if result, ok := msg["result"].(map[string]interface{}); ok {
                 if data, ok := result["data"].(map[string]interface{}); ok {
                     if value, ok := data["value"].(map[string]interface{}); ok {
                         if events, ok := value["events"].(map[string]interface{}); ok {
                             p.handleJobEvent(ctx, events)
+                        } else {
+                            log.Printf("⚠️  No events in value")
                         }
+                    } else {
+                        log.Printf("⚠️  No value in data")
                     }
+                } else {
+                    log.Printf("⚠️  No data in result")
                 }
             }
         }
     }
 }
-
 func (p *ProviderNode) handleJobEvent(ctx context.Context, events map[string]interface{}) {
     wasmEvents, ok := events["wasm.job_id"].([]interface{})
     if !ok || len(wasmEvents) == 0 {
