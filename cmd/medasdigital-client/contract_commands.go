@@ -192,51 +192,67 @@ var contractGetJobCmd = &cobra.Command{
 }
 var contractProviderNodeCmd = &cobra.Command{
     Use:   "provider-node",
-    Short: "Start provider node for contract jobs",
-    Long:  "Listen for jobs from smart contract and process them",
+    Short: "Run provider node",
+    Long:  "Start provider node to process computing jobs",
     RunE: func(cmd *cobra.Command, args []string) error {
         contractAddr, _ := cmd.Flags().GetString("contract")
-        providerKey, _ := cmd.Flags().GetString("provider-key")
-        providerName, _ := cmd.Flags().GetString("name")
-        endpoint, _ := cmd.Flags().GetString("endpoint")
-        httpPort, _ := cmd.Flags().GetInt("port")
-        workers, _ := cmd.Flags().GetInt("workers")
         register, _ := cmd.Flags().GetBool("register")
         
-        if contractAddr == "" || providerKey == "" || endpoint == "" {
-            return fmt.Errorf("contract, provider-key, and endpoint are required")
-        }
-        
-        // Get provider address from keyring
-        providerAddr, err := getProviderAddressFromKey(providerKey)
+        // Load config
+        cfg, err := loadConfig()
         if err != nil {
-            return fmt.Errorf("failed to get provider address: %w", err)
+            return fmt.Errorf("failed to load config: %w", err)
         }
         
+        if !cfg.Provider.Enabled {
+            return fmt.Errorf("provider not enabled in config. Set provider.enabled: true in %s", cfgFile)
+        }
+        
+        if cfg.Provider.FundingAddress == "" {
+            fmt.Println("⚠️  Warning: No funding_address set - auto-harvest disabled")
+        }
+        
+        // Get provider address from key
+        addrCmd := exec.Command(
+            "medasdigitald", "keys", "show", cfg.Provider.KeyName, "-a",
+            "--keyring-backend", cfg.Provider.KeyringBackend,
+        )
+        addrOutput, err := addrCmd.Output()
+        if err != nil {
+            return fmt.Errorf("failed to get provider address: %w\nDid you create the key? Run: medasdigitald keys add %s --keyring-backend %s", 
+                err, cfg.Provider.KeyName, cfg.Provider.KeyringBackend)
+        }
+        providerAddr := strings.TrimSpace(string(addrOutput))
+        
+        fmt.Printf("Provider Address: %s\n", providerAddr)
+        
+        // Register if requested
+        if register {
+            fmt.Println("Registering provider...")
+            if err := registerProvider(cfg, contractAddr, providerAddr); err != nil {
+                return fmt.Errorf("registration failed: %w", err)
+            }
+            fmt.Println("✅ Provider registered")
+        }
+        
+        // Create and start provider node
         node := contract.NewProviderNode(
             contractAddr,
             providerAddr,
-            providerKey,
-            defaultRPCEndpoint,
-            defaultChainID,
-            providerName,
-            endpoint,
-            httpPort,
-            workers,
+            cfg.Provider.KeyName,
+            cfg.Chain.RPCEndpoint,
+            cfg.Chain.ID,
+            "MEDAS Provider Node",
+            cfg.Provider.Endpoint,
+            cfg.Provider.Port,
+            cfg.Provider.Workers,
+            cfg.Provider.FundingAddress,
+            cfg.Provider.MinBalance,
+            cfg.Provider.MaxBalance,
+            cfg.Provider.HarvestIntervalHours,
         )
         
-        if register {
-            fmt.Println("Registering provider...")
-            if err := node.RegisterProvider(endpoint); err != nil {
-                return fmt.Errorf("registration failed: %w", err)
-            }
-            fmt.Println("Provider registered successfully")
-        }
-        
-        ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-        defer cancel()
-        
-        fmt.Println("Starting provider node...")
+        ctx := context.Background()
         return node.Start(ctx)
     },
 }
