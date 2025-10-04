@@ -12,14 +12,15 @@ import (
 )
 
 type Client struct {
-    config    Config
-    clientKey string
+    config     Config
+    clientKey  string
+    clientAddr string
 }
 
-func NewClient(config Config, clientKey string) *Client {
+func NewClient(config Config, clientKey string, clientAddr string) *Client {
     return &Client{
-        config:    config,
-        clientKey: clientKey,
+        config:     config,
+        clientKey:  clientKey,
         clientAddr: clientAddr,
     }
 }
@@ -125,7 +126,7 @@ func (c *Client) SubmitJob(
     msg := fmt.Sprintf(`{"submit_job":{"provider":"%s","job_type":"%s","parameters":"%s"}}`,
         providerAddr, jobType, paramsStr)
     
-    // Gas estimieren
+    // Gas estimieren mit clientAddr
     gasEst, err := EstimateGas(
         ctx,
         c.config.ContractAddress,
