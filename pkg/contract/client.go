@@ -129,72 +129,77 @@ func (c *Client) SubmitJob(
     msg := fmt.Sprintf(`{"submit_job":{"provider":"%s","job_type":"%s","parameters":"%s"}}`,
         providerAddr, jobType, paramsStr)
     
-    cmd := exec.CommandContext(ctx,
-        "medasdigitald", "tx", "wasm", "execute",
+    args := []string{
+        "tx", "wasm", "execute",
         c.config.ContractAddress, msg,
         "--amount", paymentAmount,
         "--from", c.clientKey,
         "--keyring-backend", c.keyringBackend,
         "--gas", "auto",
-        "--broadcast-mode", "sync",  
         "--gas-adjustment", "1.3",
+        "--broadcast-mode", "sync",
         "-y",
         "--node", c.config.RPCEndpoint,
         "--chain-id", c.config.ChainID,
-       
-    )
+        "--output", "json",
+    }
+    
+    fmt.Println("=== DEBUG: TX Submit ===")
+    fmt.Printf("Command: medasdigitald %s\n", strings.Join(args, " "))
+    fmt.Println("========================")
+    
+    cmd := exec.CommandContext(ctx, "medasdigitald", args...)
     
     var stdout, stderr bytes.Buffer
     cmd.Stdout = &stdout
     cmd.Stderr = &stderr
     
+    fmt.Println("Executing command...")
+    
     if err := cmd.Run(); err != nil {
-        return 0, "", fmt.Errorf("submit failed: %w\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+        fmt.Println("\n❌ Command FAILED")
+        fmt.Printf("Error: %v\n", err)
+        fmt.Printf("\n--- STDOUT ---\n%s\n", stdout.String())
+        fmt.Printf("\n--- STDERR ---\n%s\n", stderr.String())
+        return 0, "", fmt.Errorf("submit failed: %w", err)
     }
+    
+    fmt.Println("\n✅ Command SUCCESS")
+    fmt.Printf("\n--- STDOUT ---\n%s\n", stdout.String())
+    fmt.Printf("\n--- STDERR ---\n%s\n", stderr.String())
     
     var txResp struct {
         TxHash string `json:"txhash"`
+        Code   int    `json:"code"`
+        RawLog string `json:"raw_log"`
     }
+    
     if err := json.Unmarshal(stdout.Bytes(), &txResp); err != nil {
+        fmt.Printf("Failed to parse JSON: %v\n", err)
         return 0, "", fmt.Errorf("parse tx response failed: %w", err)
     }
     
-    fmt.Printf("TX Hash: %s\n", txResp.TxHash)  // ← DEBUG: TX Hash ausgeben
-    fmt.Println("Waiting for TX finalization...")
+    fmt.Printf("\nParsed Response:\n")
+    fmt.Printf("  TX Hash: %s\n", txResp.TxHash)
+    fmt.Printf("  Code: %d\n", txResp.Code)
+    if txResp.RawLog != "" {
+        fmt.Printf("  Raw Log: %s\n", txResp.RawLog)
+    }
     
-    time.Sleep(6 * time.Second)
+    if txResp.Code != 0 {
+        return 0, txResp.TxHash, fmt.Errorf("tx failed with code %d: %s", txResp.Code, txResp.RawLog)
+    }
+    
+    fmt.Println("\nWaiting 8 seconds for block inclusion...")
+    time.Sleep(8 * time.Second)
+    
+    fmt.Println("Fetching job ID from TX...")
     jobID, err := c.getJobIDFromTx(ctx, txResp.TxHash)
     if err != nil {
         return 0, txResp.TxHash, fmt.Errorf("get job_id failed: %w", err)
     }
     
     return jobID, txResp.TxHash, nil
-}
-// GetJob holt Job-Details
-func (c *Client) GetJob(ctx context.Context, jobID uint64) (*ContractJob, error) {
-    query := fmt.Sprintf(`{"get_job":{"job_id":%d}}`, jobID)
-    
-    cmd := exec.CommandContext(ctx,
-        "medasdigitald", "query", "wasm", "contract-state", "smart",
-        c.config.ContractAddress, query,
-        "--node", c.config.RPCEndpoint,
-        "--output", "json",
-    )
-    
-    output, err := cmd.Output()
-    if err != nil {
-        return nil, fmt.Errorf("query failed: %w", err)
-    }
-    
-    var result struct {
-        Data ContractJob `json:"data"`
-    }
-    
-    if err := json.Unmarshal(output, &result); err != nil {
-        return nil, err
-    }
-    
-    return &result.Data, nil
 }
 
 // WaitForCompletion wartet auf Job-Completion
