@@ -3,6 +3,8 @@ package main
 import (
     "context"
     "fmt"
+    "os"
+    "os/signal"
     "strings"
     "time"
     
@@ -171,7 +173,7 @@ var contractGetJobCmd = &cobra.Command{
         return nil
     },
 }
-var providerNodeCmd = &cobra.Command{
+var contractProviderNodeCmd = &cobra.Command{
     Use:   "provider-node",
     Short: "Start provider node for contract jobs",
     Long:  "Listen for jobs from smart contract and process them",
@@ -246,6 +248,7 @@ func init() {
     contractCmd.AddCommand(contractListProvidersCmd)
     contractCmd.AddCommand(contractSubmitJobCmd)
     contractCmd.AddCommand(contractGetJobCmd)
+    contractCmd.AddCommand(contractProviderNodeCmd)
     
     contractCmd.PersistentFlags().String("contract",
         "medas1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrswl7kpn",
