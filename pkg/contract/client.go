@@ -126,28 +126,15 @@ func (c *Client) SubmitJob(
     msg := fmt.Sprintf(`{"submit_job":{"provider":"%s","job_type":"%s","parameters":"%s"}}`,
         providerAddr, jobType, paramsStr)
     
-    // Gas estimieren mit clientAddr
-    gasEst, err := EstimateGas(
-        ctx,
-        c.config.ContractAddress,
-        msg,
-        c.clientAddr,
-        paymentAmount,
-        c.config.RPCEndpoint,
-        c.config.ChainID,
-    )
-    if err != nil {
-        return 0, "", fmt.Errorf("gas estimation failed: %w", err)
-    }
-    
-    // Submit mit geschätztem Gas
+    // KEIN EstimateGas mehr - direkt --gas auto beim Submit
     cmd := exec.CommandContext(ctx,
         "medasdigitald", "tx", "wasm", "execute",
         c.config.ContractAddress, msg,
         "--amount", paymentAmount,
         "--from", c.clientKey,
-        "--gas", fmt.Sprintf("%d", gasEst.GasWanted),
-        "--fees", gasEst.Fees,
+        "--gas", "auto",
+        "--gas-adjustment", "1.3",
+        "--fees", "6000umedas",
         "-y",
         "--node", c.config.RPCEndpoint,
         "--chain-id", c.config.ChainID,
