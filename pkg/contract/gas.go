@@ -14,7 +14,7 @@ func EstimateGas(
     ctx context.Context,
     contractAddr string,
     msg string,
-    fromKey string,
+    fromAddr string, 
     amount string,
     rpcEndpoint string,
     chainID string,
