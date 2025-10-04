@@ -20,6 +20,7 @@ func NewClient(config Config, clientKey string) *Client {
     return &Client{
         config:    config,
         clientKey: clientKey,
+        clientAddr: clientAddr,
     }
 }
 
@@ -129,7 +130,7 @@ func (c *Client) SubmitJob(
         ctx,
         c.config.ContractAddress,
         msg,
-        c.clientKey,
+        c.clientAddr,
         paymentAmount,
         c.config.RPCEndpoint,
         c.config.ChainID,
