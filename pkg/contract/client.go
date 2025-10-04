@@ -159,7 +159,10 @@ func (c *Client) SubmitJob(
         return 0, "", fmt.Errorf("parse tx response failed: %w", err)
     }
     
-    time.Sleep(3 * time.Second)
+    fmt.Printf("TX Hash: %s\n", txResp.TxHash)  // ← DEBUG: TX Hash ausgeben
+    fmt.Println("Waiting for TX finalization...")
+    
+    time.Sleep(6 * time.Second)
     jobID, err := c.getJobIDFromTx(ctx, txResp.TxHash)
     if err != nil {
         return 0, txResp.TxHash, fmt.Errorf("get job_id failed: %w", err)
