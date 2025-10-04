@@ -16,6 +16,7 @@ type Client struct {
     config     Config
     clientKey  string
     clientAddr string
+    keyringBackend string
 }
 
 func NewClient(config Config, clientKey string, clientAddr string) *Client {
@@ -23,6 +24,7 @@ func NewClient(config Config, clientKey string, clientAddr string) *Client {
         config:     config,
         clientKey:  clientKey,
         clientAddr: clientAddr,
+        keyringBackend: keyringBackend,
     }
 }
 
@@ -132,6 +134,7 @@ func (c *Client) SubmitJob(
         c.config.ContractAddress, msg,
         "--amount", paymentAmount,
         "--from", c.clientKey,
+        "--keyring-backend", c.keyringBackend,
         "--gas", "auto",
         "--gas-adjustment", "1.3",
         "--fees", "6000umedas",
