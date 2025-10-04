@@ -20,27 +20,44 @@ func EstimateGas(
     chainID string,
 ) (*GasEstimation, error) {
     
-    args := []string{
+    // Step 1: Generate unsigned TX
+    args1 := []string{
         "tx", "wasm", "execute",
         contractAddr, msg,
         "--from", fromAddr,
-        "--gas", "auto",
-        "--gas-adjustment", "1.3",
-        "--node", rpcEndpoint,      // ← NEU
+        "--generate-only",
         "--chain-id", chainID,
-        "--simulate",               // ← NEU (statt generate-only + offline)
-        "--output", "json",
     }
     
     if amount != "" {
-        args = append(args, "--amount", amount)
+        args1 = append(args1, "--amount", amount)
     }
     
-    cmd := exec.CommandContext(ctx, "medasdigitald", args...)
-    
-    output, err := cmd.Output()
+    cmd1 := exec.CommandContext(ctx, "medasdigitald", args1...)
+    unsignedTx, err := cmd1.Output()
     if err != nil {
-        return nil, fmt.Errorf("gas estimation failed: %w, output: %s", err, output)
+        return nil, fmt.Errorf("generate tx failed: %w, output: %s", err, unsignedTx)
+    }
+    
+    // Step 2: Write to temp file
+    tmpFile := "/tmp/unsigned-tx.json"
+    if err := os.WriteFile(tmpFile, unsignedTx, 0644); err != nil {
+        return nil, fmt.Errorf("write temp file failed: %w", err)
+    }
+    defer os.Remove(tmpFile)
+    
+    // Step 3: Simulate
+    cmd2 := exec.CommandContext(ctx,
+        "medasdigitald", "tx", "simulate", tmpFile,
+        "--from", fromAddr,
+        "--node", rpcEndpoint,
+        "--chain-id", chainID,
+        "--output", "json",
+    )
+    
+    output, err := cmd2.Output()
+    if err != nil {
+        return nil, fmt.Errorf("simulate failed: %w, output: %s", err, output)
     }
     
     var result struct {
@@ -51,11 +68,14 @@ func EstimateGas(
     }
     
     if err := json.Unmarshal(output, &result); err != nil {
-        return nil, fmt.Errorf("parse gas estimation: %w", err)
+        return nil, fmt.Errorf("parse simulation: %w", err)
     }
     
     gasWanted, _ := strconv.ParseUint(result.GasInfo.GasWanted, 10, 64)
     gasUsed, _ := strconv.ParseUint(result.GasInfo.GasUsed, 10, 64)
+    
+    // Apply gas adjustment
+    gasWanted = uint64(float64(gasWanted) * 1.3)
     
     feePerGas := 0.025
     totalFee := uint64(float64(gasWanted) * feePerGas)
