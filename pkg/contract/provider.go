@@ -3,12 +3,16 @@ package contract
 import (
     "bytes"
     "context"
+    "crypto/sha256"
+    "encoding/hex"
     "encoding/json"
     "fmt"
     "log"
     "net/http"
     "os/exec"
     "strconv"
+    "strings"
+    "sync"
     "time"
 
     "github.com/gorilla/websocket"
@@ -31,6 +35,8 @@ type ProviderNode struct {
     harvestInterval      time.Duration
     jobManager           *compute.JobManager
     wsClient             *websocket.Conn
+    results              map[string]*compute.ComputeJob  // NEW: Store results
+    resultsMu            sync.RWMutex                     // NEW: Mutex for thread-safe access
 }
 
 func NewProviderNode(
@@ -56,6 +62,7 @@ func NewProviderNode(
         maxBalance:      maxBalance,
         harvestInterval: time.Duration(harvestIntervalHours) * time.Hour,
         jobManager: compute.NewJobManager(workers, 100, compute.NewPricingManager("medas1kc7lctfazdpd8y6ecapdfv3d6ch97prc58qaem")),
+        results:         make(map[string]*compute.ComputeJob), // NEW: Initialize results map
     }
 }
 
@@ -215,18 +222,14 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
                 continue
             }
             
-            // Check for events in result
             if result, ok := msg["result"].(map[string]interface{}); ok {
                 if events, ok := result["events"].(map[string]interface{}); ok {
-                    // Events are directly in result.events
                     p.handleJobEvent(ctx, events)
                 } else if data, ok := result["data"].(map[string]interface{}); ok {
-                    // Events might be in result.data.value
                     if value, ok := data["value"].(map[string]interface{}); ok {
                         if txResult, ok := value["TxResult"].(map[string]interface{}); ok {
                             if result, ok := txResult["result"].(map[string]interface{}); ok {
                                 if evts, ok := result["events"].([]interface{}); ok {
-                                    // Parse events array
                                     p.handleJobEventArray(ctx, evts)
                                 }
                             }
@@ -263,6 +266,7 @@ func (p *ProviderNode) handleJobEventArray(ctx context.Context, events []interfa
         }
     }
 }
+
 func (p *ProviderNode) handleJobEvent(ctx context.Context, events map[string]interface{}) {
     wasmEvents, ok := events["wasm.job_id"].([]interface{})
     if !ok || len(wasmEvents) == 0 {
@@ -304,10 +308,13 @@ func (p *ProviderNode) processJob(ctx context.Context, contractJobID uint64) {
         return
     }
     
+    // Wait for completion and get final job state
+    var completedJob *compute.ComputeJob
     for {
         time.Sleep(1 * time.Second)
         currentJob, _ := p.jobManager.GetJob(job.ID)
         if currentJob.Status == compute.StatusCompleted {
+            completedJob = currentJob // NEW: Save the completed job
             break
         }
         if currentJob.Status == compute.StatusFailed {
@@ -316,8 +323,17 @@ func (p *ProviderNode) processJob(ctx context.Context, contractJobID uint64) {
         }
     }
     
+    // NEW: Store the result for HTTP retrieval
+    p.resultsMu.Lock()
+    p.results[job.ID] = completedJob
+    p.resultsMu.Unlock()
+    
     resultURL := fmt.Sprintf("%s/results/%s.json", p.endpointURL, job.ID)
-    resultHash := "placeholder-hash"
+    
+    // NEW: Calculate real hash from result
+    resultData, _ := json.Marshal(completedJob.Result)
+    hash := sha256.Sum256(resultData)
+    resultHash := hex.EncodeToString(hash[:])
     
     log.Printf("✅ Job completed, marking as complete in contract")
     
@@ -389,10 +405,37 @@ func (p *ProviderNode) startHTTPServer(ctx context.Context) {
         json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
     })
     
+    // NEW: Enhanced results handler that returns real PI results
     http.HandleFunc("/results/", func(w http.ResponseWriter, r *http.Request) {
-        // Serve job results
+        // Extract job ID from URL: /results/pi_calculation-1.json
+        path := strings.TrimPrefix(r.URL.Path, "/results/")
+        jobID := strings.TrimSuffix(path, ".json")
+        
+        p.resultsMu.RLock()
+        job, exists := p.results[jobID]
+        p.resultsMu.RUnlock()
+        
         w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]string{"result": "pi calculation result"})
+        
+        if !exists {
+            w.WriteHeader(http.StatusNotFound)
+            json.NewEncoder(w).Encode(map[string]string{
+                "error": "Result not found",
+                "job_id": jobID,
+            })
+            return
+        }
+        
+        // Return the actual computation result
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "job_id":       job.ID,
+            "status":       job.Status,
+            "result":       job.Result,
+            "duration":     job.Duration,
+            "completed_at": job.CompletedAt,
+            "tier":         job.Tier,
+            "parameters":   job.Parameters,
+        })
     })
     
     addr := fmt.Sprintf(":%d", p.httpPort)
