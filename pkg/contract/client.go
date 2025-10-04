@@ -248,11 +248,11 @@ func (c *Client) getJobIDFromTx(ctx context.Context, txHash string) (uint64, err
     
     output, err := cmd.Output()
     if err != nil {
-        return 0, err
+        return 0, fmt.Errorf("query tx failed: %w", err)
     }
     
     var txResp struct {
-        Logs []struct {
+        TxResponse struct {  // ← WICHTIG: Events sind unter tx_response, nicht logs
             Events []struct {
                 Type       string `json:"type"`
                 Attributes []struct {
@@ -260,26 +260,25 @@ func (c *Client) getJobIDFromTx(ctx context.Context, txHash string) (uint64, err
                     Value string `json:"value"`
                 } `json:"attributes"`
             } `json:"events"`
-        } `json:"logs"`
+        } `json:"tx_response"`
     }
     
     if err := json.Unmarshal(output, &txResp); err != nil {
-        return 0, err
+        return 0, fmt.Errorf("parse tx failed: %w", err)
     }
     
-    for _, log := range txResp.Logs {
-        for _, event := range log.Events {
-            if event.Type == "wasm" {
-                for _, attr := range event.Attributes {
-                    if attr.Key == "job_id" {
-                        return strconv.ParseUint(attr.Value, 10, 64)
-                    }
+    // Suche in Events (nicht Logs!)
+    for _, event := range txResp.TxResponse.Events {
+        if event.Type == "wasm" {
+            for _, attr := range event.Attributes {
+                if attr.Key == "job_id" {
+                    return strconv.ParseUint(attr.Value, 10, 64)
                 }
             }
         }
     }
     
-    return 0, fmt.Errorf("job_id not found in tx")
+    return 0, fmt.Errorf("job_id not found in tx events")
 }
 
 // Helper functions
