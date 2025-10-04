@@ -1,6 +1,7 @@
 package contract
 
 import (
+    "bytes"
     "context"
     "encoding/json"
     "fmt"
@@ -49,17 +50,24 @@ func EstimateGas(
     
     // Step 3: Simulate
     cmd2 := exec.CommandContext(ctx,
-        "medasdigitald", "tx", "simulate", tmpFile,
-        "--from", fromAddr,
-        "--node", rpcEndpoint,
-        "--chain-id", chainID,
-        "--output", "json",
-    )
-    
-    output, err := cmd2.Output()
-    if err != nil {
-        return nil, fmt.Errorf("simulate failed: %w", err)
-    }
+    "medasdigitald", "tx", "simulate", tmpFile,
+    "--from", fromAddr,
+    "--node", rpcEndpoint,
+    "--chain-id", chainID,
+    "--output", "json",
+)
+
+// Capture both stdout and stderr
+var stdout, stderr bytes.Buffer
+cmd2.Stdout = &stdout
+cmd2.Stderr = &stderr
+
+err = cmd2.Run()
+if err != nil {
+    return nil, fmt.Errorf("simulate failed: %w\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
+}
+
+output := stdout.Bytes()
     
     var result struct {
         GasInfo struct {
