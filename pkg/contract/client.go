@@ -127,7 +127,6 @@ func (c *Client) SubmitJob(
     msg := fmt.Sprintf(`{"submit_job":{"provider":"%s","job_type":"%s","parameters":"%s"}}`,
         providerAddr, jobType, paramsStr)
     
-    // KEIN EstimateGas mehr - direkt --gas auto beim Submit
     cmd := exec.CommandContext(ctx,
         "medasdigitald", "tx", "wasm", "execute",
         c.config.ContractAddress, msg,
@@ -141,27 +140,19 @@ func (c *Client) SubmitJob(
         "--chain-id", c.config.ChainID,
         "--output", "json",
     )
-
-var stdout, stderr bytes.Buffer
-cmd.Stdout = &stdout
-cmd.Stderr = &stderr
-
-err = cmd.Run()
-if err != nil {
-    return 0, "", fmt.Errorf("submit failed: %w\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
-}
-
-output := stdout.Bytes()
     
-    output, err := cmd.Output()
-    if err != nil {
-        return 0, "", fmt.Errorf("submit failed: %w, output: %s", err, output)
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    
+    if err := cmd.Run(); err != nil {
+        return 0, "", fmt.Errorf("submit failed: %w\nstdout: %s\nstderr: %s", err, stdout.String(), stderr.String())
     }
     
     var txResp struct {
         TxHash string `json:"txhash"`
     }
-    if err := json.Unmarshal(output, &txResp); err != nil {
+    if err := json.Unmarshal(stdout.Bytes(), &txResp); err != nil {
         return 0, "", fmt.Errorf("parse tx response failed: %w", err)
     }
     
@@ -173,7 +164,6 @@ output := stdout.Bytes()
     
     return jobID, txResp.TxHash, nil
 }
-
 // GetJob holt Job-Details
 func (c *Client) GetJob(ctx context.Context, jobID uint64) (*ContractJob, error) {
     query := fmt.Sprintf(`{"get_job":{"job_id":%d}}`, jobID)
