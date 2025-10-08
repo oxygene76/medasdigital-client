@@ -73,7 +73,7 @@ func NewProviderNode(
 }
 
 func (p *ProviderNode) Start(ctx context.Context) error {
-    log.Printf("Provider Node Started")
+    log.Printf("Provider Node Started (v2.0)")
     log.Printf("  Name: %s", p.providerName)
     log.Printf("  Address: %s", p.providerAddr)
     log.Printf("  Endpoint: %s", p.endpointURL)
@@ -328,7 +328,7 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
     wsURL := "wss://rpc.medas-digital.io:26657/websocket"
     
     dialer := websocket.Dialer{
-    HandshakeTimeout: 10 * time.Second,
+        HandshakeTimeout: 10 * time.Second,
     }
     conn, _, err := dialer.Dial(wsURL, nil)
     if err != nil {
@@ -340,8 +340,8 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
     conn.SetReadLimit(1024 * 1024) // 1MB max message size
     conn.SetReadDeadline(time.Now().Add(60 * time.Second))
     conn.SetPongHandler(func(string) error {
-    conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-    return nil
+        conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+        return nil
     })
     
     query := fmt.Sprintf(
@@ -367,29 +367,31 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
     
     log.Printf("✅ WebSocket connected and subscribed")
     go p.pingRoutine(conn, ctx)  // Start ping routine
+    
     for {
-    select {
-    case <-ctx.Done():
-        return nil
-    default:
-        conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-        
-        var msg map[string]interface{}
-                        if err := conn.ReadJSON(&msg); err != nil {
-                            // Check if it's a normal close
-                            if websocket.IsUnexpectedCloseError(err, 
-                                websocket.CloseGoingAway, 
-                                websocket.CloseAbnormalClosure,
-                                websocket.CloseNormalClosure) {
-                                return fmt.Errorf("websocket closed unexpectedly: %w", err)
-                                                }
-                                return err  // Return error for reconnection
-                                }
-        
-                                // Process in goroutine to not block
-                                go p.processWebSocketMessage(msg, ctx)
-                                }
-                            }
+        select {
+        case <-ctx.Done():
+            return nil
+        default:
+            conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+            
+            var msg map[string]interface{}
+            if err := conn.ReadJSON(&msg); err != nil {
+                // Check if it's a normal close
+                if websocket.IsUnexpectedCloseError(err, 
+                    websocket.CloseGoingAway, 
+                    websocket.CloseAbnormalClosure,
+                    websocket.CloseNormalClosure) {
+                    return fmt.Errorf("websocket closed unexpectedly: %w", err)
+                }
+                return err  // Return error for reconnection
+            }
+            
+            // Process in goroutine to not block
+            go p.processWebSocketMessage(msg, ctx)
+        }
+    }
+}
                      
 
 func (p *ProviderNode) processWebSocketMessage(msg map[string]interface{}, ctx context.Context) {
