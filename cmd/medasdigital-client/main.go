@@ -201,6 +201,7 @@ config := &Config{
                 Port:                 8080,
                 Workers:              4,
                 HarvestIntervalHours: 1,
+				HeartbeatIntervalMinutes: 360,  
             },
 			GPU: struct {
 				Enabled     bool `yaml:"enabled"`
