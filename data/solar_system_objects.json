@@ -1,0 +1,377 @@
+{
+  "metadata": {
+    "version": "2024.10.1",
+    "epoch_jd": 2460200.5,
+    "epoch_date": "2023-09-13 00:00:00 UTC",
+    "units": {
+      "distance": "AU",
+      "angle": "degrees",
+      "mass": "solar_masses",
+      "time": "days"
+    }
+  },
+  "planets": [
+    {
+      "name": "Jupiter",
+      "id": "599",
+      "mass": 0.0009545942,
+      "radius_km": 71492,
+      "orbital_elements": {
+        "semimajor_axis": 5.2038,
+        "eccentricity": 0.0489,
+        "inclination": 1.303,
+        "longitude_ascending_node": 100.464,
+        "argument_perihelion": 273.867,
+        "mean_anomaly": 20.020,
+        "orbital_period": 4332.59
+      }
+    },
+    {
+      "name": "Saturn",
+      "id": "699",
+      "mass": 0.0002857214,
+      "radius_km": 60268,
+      "orbital_elements": {
+        "semimajor_axis": 9.5826,
+        "eccentricity": 0.0565,
+        "inclination": 2.485,
+        "longitude_ascending_node": 113.665,
+        "argument_perihelion": 339.392,
+        "mean_anomaly": 317.020,
+        "orbital_period": 10759.22
+      }
+    },
+    {
+      "name": "Uranus",
+      "id": "799",
+      "mass": 0.00004365785,
+      "radius_km": 25559,
+      "orbital_elements": {
+        "semimajor_axis": 19.2012,
+        "eccentricity": 0.0469,
+        "inclination": 0.773,
+        "longitude_ascending_node": 74.006,
+        "argument_perihelion": 96.998,
+        "mean_anomaly": 142.238,
+        "orbital_period": 30688.5
+      }
+    },
+    {
+      "name": "Neptune",
+      "id": "899",
+      "mass": 0.00005149497,
+      "radius_km": 24764,
+      "orbital_elements": {
+        "semimajor_axis": 30.0479,
+        "eccentricity": 0.0087,
+        "inclination": 1.767,
+        "longitude_ascending_node": 131.783,
+        "argument_perihelion": 276.336,
+        "mean_anomaly": 256.228,
+        "orbital_period": 60182.0
+      }
+    }
+  ],
+  "etnos": [
+    {
+      "name": "Sedna",
+      "designation": "2003 VB12",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 483.3,
+        "eccentricity": 0.8496,
+        "inclination": 11.93,
+        "longitude_ascending_node": 144.26,
+        "argument_perihelion": 311.02,
+        "mean_anomaly": 359.46,
+        "perihelion": 76.04,
+        "aphelion": 890.56,
+        "orbital_period": 10623.0
+      },
+      "physical": {
+        "absolute_magnitude": 1.5,
+        "estimated_diameter_km": 995
+      },
+      "discovery": {
+        "year": 2003,
+        "discoverer": "Brown, Trujillo, Rabinowitz"
+      }
+    },
+    {
+      "name": "2012 VP113",
+      "designation": "2012 VP113",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 261.0,
+        "eccentricity": 0.6894,
+        "inclination": 24.06,
+        "longitude_ascending_node": 90.80,
+        "argument_perihelion": 293.98,
+        "mean_anomaly": 6.35,
+        "perihelion": 80.47,
+        "aphelion": 441.53,
+        "orbital_period": 4216.0
+      },
+      "physical": {
+        "absolute_magnitude": 4.0,
+        "estimated_diameter_km": 450
+      },
+      "discovery": {
+        "year": 2012,
+        "discoverer": "Sheppard, Trujillo"
+      }
+    },
+    {
+      "name": "2015 TG387",
+      "designation": "2015 TG387",
+      "nickname": "The Goblin",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 1175.0,
+        "eccentricity": 0.9433,
+        "inclination": 11.66,
+        "longitude_ascending_node": 300.82,
+        "argument_perihelion": 118.17,
+        "mean_anomaly": 352.0,
+        "perihelion": 65.0,
+        "aphelion": 2285.0,
+        "orbital_period": 36000.0
+      },
+      "physical": {
+        "absolute_magnitude": 5.3,
+        "estimated_diameter_km": 300
+      },
+      "discovery": {
+        "year": 2015,
+        "discoverer": "Sheppard, Trujillo, Tholen"
+      }
+    },
+    {
+      "name": "2004 VN112",
+      "designation": "2004 VN112",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 318.0,
+        "eccentricity": 0.8519,
+        "inclination": 25.56,
+        "longitude_ascending_node": 66.00,
+        "argument_perihelion": 327.10,
+        "mean_anomaly": 5.72,
+        "perihelion": 47.32,
+        "aphelion": 588.68,
+        "orbital_period": 5670.0
+      },
+      "physical": {
+        "absolute_magnitude": 6.4,
+        "estimated_diameter_km": 130
+      },
+      "discovery": {
+        "year": 2004,
+        "discoverer": "CTIO"
+      }
+    },
+    {
+      "name": "2010 GB174",
+      "designation": "2010 GB174",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 351.0,
+        "eccentricity": 0.8672,
+        "inclination": 21.54,
+        "longitude_ascending_node": 130.59,
+        "argument_perihelion": 347.78,
+        "mean_anomaly": 359.13,
+        "perihelion": 48.64,
+        "aphelion": 653.36,
+        "orbital_period": 6580.0
+      },
+      "physical": {
+        "absolute_magnitude": 6.5,
+        "estimated_diameter_km": 200
+      },
+      "discovery": {
+        "year": 2010,
+        "discoverer": "Schwamb et al."
+      }
+    },
+    {
+      "name": "2013 SY99",
+      "designation": "2013 SY99",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 694.0,
+        "eccentricity": 0.9318,
+        "inclination": 4.23,
+        "longitude_ascending_node": 29.52,
+        "argument_perihelion": 32.37,
+        "mean_anomaly": 357.89,
+        "perihelion": 49.90,
+        "aphelion": 1338.10,
+        "orbital_period": 18300.0
+      },
+      "physical": {
+        "absolute_magnitude": 6.7,
+        "estimated_diameter_km": 250
+      },
+      "discovery": {
+        "year": 2013,
+        "discoverer": "OSSOS"
+      }
+    },
+    {
+      "name": "2014 SR349",
+      "designation": "2014 SR349",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 289.0,
+        "eccentricity": 0.8405,
+        "inclination": 17.98,
+        "longitude_ascending_node": 341.39,
+        "argument_perihelion": 341.35,
+        "mean_anomaly": 1.56,
+        "perihelion": 47.62,
+        "aphelion": 530.38,
+        "orbital_period": 4910.0
+      },
+      "physical": {
+        "absolute_magnitude": 6.6,
+        "estimated_diameter_km": 200
+      },
+      "discovery": {
+        "year": 2014,
+        "discoverer": "Sheppard, Trujillo"
+      }
+    },
+    {
+      "name": "2015 RX245",
+      "designation": "2015 RX245",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 430.0,
+        "eccentricity": 0.8944,
+        "inclination": 12.14,
+        "longitude_ascending_node": 8.61,
+        "argument_perihelion": 65.41,
+        "mean_anomaly": 358.24,
+        "perihelion": 45.48,
+        "aphelion": 814.52,
+        "orbital_period": 8920.0
+      },
+      "physical": {
+        "absolute_magnitude": 6.2,
+        "estimated_diameter_km": 250
+      },
+      "discovery": {
+        "year": 2015,
+        "discoverer": "OSSOS"
+      }
+    },
+    {
+      "name": "2013 FT28",
+      "designation": "2013 FT28",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 296.0,
+        "eccentricity": 0.8587,
+        "inclination": 17.34,
+        "longitude_ascending_node": 217.75,
+        "argument_perihelion": 40.25,
+        "mean_anomaly": 359.39,
+        "perihelion": 43.52,
+        "aphelion": 548.48,
+        "orbital_period": 5090.0
+      },
+      "physical": {
+        "absolute_magnitude": 6.7,
+        "estimated_diameter_km": 200
+      },
+      "discovery": {
+        "year": 2013,
+        "discoverer": "Sheppard, Trujillo"
+      }
+    },
+    {
+      "name": "2014 FE72",
+      "designation": "2014 FE72",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 1555.0,
+        "eccentricity": 0.9761,
+        "inclination": 20.64,
+        "longitude_ascending_node": 336.81,
+        "argument_perihelion": 134.41,
+        "mean_anomaly": 359.88,
+        "perihelion": 36.33,
+        "aphelion": 3073.67,
+        "orbital_period": 61400.0
+      },
+      "physical": {
+        "absolute_magnitude": 6.1,
+        "estimated_diameter_km": 200
+      },
+      "discovery": {
+        "year": 2014,
+        "discoverer": "Sheppard, Trujillo"
+      }
+    },
+    {
+      "name": "2015 KG163",
+      "designation": "2015 KG163",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 676.0,
+        "eccentricity": 0.9406,
+        "inclination": 14.04,
+        "longitude_ascending_node": 219.10,
+        "argument_perihelion": 32.03,
+        "mean_anomaly": 358.58,
+        "perihelion": 40.50,
+        "aphelion": 1311.50,
+        "orbital_period": 17580.0
+      },
+      "physical": {
+        "absolute_magnitude": 7.0,
+        "estimated_diameter_km": 150
+      },
+      "discovery": {
+        "year": 2015,
+        "discoverer": "OSSOS"
+      }
+    },
+    {
+      "name": "2015 GT50",
+      "designation": "2015 GT50",
+      "type": "extreme_tno",
+      "orbital_elements": {
+        "semimajor_axis": 312.0,
+        "eccentricity": 0.8766,
+        "inclination": 8.80,
+        "longitude_ascending_node": 46.06,
+        "argument_perihelion": 129.20,
+        "mean_anomaly": 359.11,
+        "perihelion": 38.46,
+        "aphelion": 585.54,
+        "orbital_period": 5510.0
+      },
+      "physical": {
+        "absolute_magnitude": 8.6,
+        "estimated_diameter_km": 90
+      },
+      "discovery": {
+        "year": 2015,
+        "discoverer": "Sheppard, Trujillo"
+      }
+    }
+  ],
+  "planet9_search_parameters": {
+    "mass_range": [5, 10],
+    "mass_unit": "earth_masses",
+    "semimajor_axis_range": [400, 800],
+    "eccentricity_range": [0.2, 0.5],
+    "inclination_range": [15, 30],
+    "argument_perihelion_clustering": {
+      "center": 318,
+      "spread": 30
+    }
+  }
+}
