@@ -120,54 +120,120 @@ func (oe OrbitalElements) GetLongitudeOfPerihelion() float64 {
 // Add this function to pkg/astronomy/orbital/elements.go
 
 // CartesianToOrbital converts position and velocity vectors to orbital elements
+// CartesianToOrbital converts position and velocity vectors to orbital elements
+// Position in AU, velocity in AU/year, mu in AU³/(M☉·year²)
 func CartesianToOrbital(pos, vel astromath.Vector3, mu float64) OrbitalElements {
-    // Specific angular momentum
-    h := pos.Cross(vel)
-    
-    // Eccentricity vector
     r := pos.Magnitude()
     v := vel.Magnitude()
-    eVec := vel.Cross(h).Scale(1.0/mu).Sub(pos.Scale(1.0/r))
+    
+    // Check for invalid inputs
+    if r == 0 || v == 0 || mu == 0 {
+        return OrbitalElements{}
+    }
+    
+    // Angular momentum vector
+    h := pos.Cross(vel)
+    hMag := h.Magnitude()
+    
+    // Check if orbit is degenerate
+    if hMag < 1e-10 {
+        return OrbitalElements{}
+    }
+    
+    // Specific orbital energy
+    energy := (v*v)/2.0 - mu/r
+    
+    // Semi-major axis (from vis-viva equation)
+    a := -mu / (2 * energy)
+    
+    // Eccentricity vector: e = ((v²-μ/r)r - (r·v)v) / μ
+    rdotv := pos.Dot(vel)
+    eVec := pos.Scale((v*v - mu/r) / mu).Sub(vel.Scale(rdotv / mu))
     e := eVec.Magnitude()
     
-    // Semi-major axis
-    a := 1.0 / (2.0/r - v*v/mu)
+    // For near-circular orbits, eccentricity vector may be unreliable
+    if e < 1e-10 {
+        e = 0
+    }
     
-    // Inclination
-    i := math.Acos(h.Z / h.Magnitude())
+    // Validate eccentricity
+    if e >= 1.0 {
+        // This shouldn't happen for bound orbits
+        fmt.Printf("DEBUG CartesianToOrbital: e=%.3f, a=%.1f, energy=%.6f\n", e, a, energy)
+        // Clamp to just below parabolic
+        e = 0.999
+    }
     
-    // Longitude of ascending node
+    // Inclination (angle between h and z-axis)
+    i := math.Acos(math.Min(1.0, math.Max(-1.0, h.Z/hMag)))
+    
+    // Node vector (points along line of nodes)
     n := astromath.Vector3{0, 0, 1}.Cross(h)
+    nMag := n.Magnitude()
+    
+    // Longitude of ascending node (angle from x-axis to node)
     Omega := 0.0
-    if n.Magnitude() > 1e-10 {
+    if nMag > 1e-10 {
         Omega = math.Atan2(n.Y, n.X)
         if Omega < 0 {
             Omega += 2 * math.Pi
         }
     }
     
-    // Argument of perihelion
+    // Argument of perihelion (angle from node to perihelion)
     omega := 0.0
-    if n.Magnitude() > 1e-10 && e > 1e-10 {
-        cosOmega := n.Dot(eVec) / (n.Magnitude() * e)
-        if math.Abs(cosOmega) <= 1.0 {
-            omega = math.Acos(cosOmega)
-            if eVec.Z < 0 {
-                omega = 2*math.Pi - omega
-            }
+    if nMag > 1e-10 && e > 1e-10 {
+        cosOmega := n.Dot(eVec) / (nMag * e)
+        cosOmega = math.Min(1.0, math.Max(-1.0, cosOmega))
+        omega = math.Acos(cosOmega)
+        if eVec.Z < 0 {
+            omega = 2*math.Pi - omega
+        }
+    } else if e > 1e-10 {
+        // For zero inclination, use angle from x-axis
+        omega = math.Atan2(eVec.Y, eVec.X)
+        if omega < 0 {
+            omega += 2 * math.Pi
         }
     }
     
-    // Mean anomaly
-    cosE := (1 - r/a) / e
-    E := 0.0
-    if math.Abs(cosE) <= 1.0 {
-        E = math.Acos(cosE)
-        if pos.Dot(vel) < 0 {
-            E = 2*math.Pi - E
+    // True anomaly (angle from perihelion to current position)
+    nu := 0.0
+    if e > 1e-10 {
+        cosNu := pos.Dot(eVec) / (r * e)
+        cosNu = math.Min(1.0, math.Max(-1.0, cosNu))
+        nu = math.Acos(cosNu)
+        if rdotv < 0 {
+            nu = 2*math.Pi - nu
+        }
+    } else {
+        // For circular orbit, measure from node or x-axis
+        if nMag > 1e-10 {
+            cosNu := pos.Dot(n) / (r * nMag)
+            cosNu = math.Min(1.0, math.Max(-1.0, cosNu))
+            nu = math.Acos(cosNu)
+        } else {
+            nu = math.Atan2(pos.Y, pos.X)
+        }
+        if nu < 0 {
+            nu += 2 * math.Pi
         }
     }
-    M := E - e*math.Sin(E)
+    
+    // Eccentric anomaly and mean anomaly
+    E := 0.0
+    M := 0.0
+    if e < 0.99 {
+        // Elliptical orbit
+        E = 2 * math.Atan(math.Tan(nu/2) / math.Sqrt((1+e)/(1-e)))
+        if E < 0 {
+            E += 2 * math.Pi
+        }
+        M = E - e*math.Sin(E)
+    } else {
+        // Near-parabolic, use true anomaly as approximation
+        M = nu
+    }
     
     return OrbitalElements{
         SemiMajorAxis:          a,
