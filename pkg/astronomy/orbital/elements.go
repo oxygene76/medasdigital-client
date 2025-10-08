@@ -117,3 +117,64 @@ func (oe OrbitalElements) GetOrbitalPeriod(mu float64) float64 {
 func (oe OrbitalElements) GetLongitudeOfPerihelion() float64 {
     return math.Mod(oe.LongitudeAscendingNode + oe.ArgumentPerihelion, 2*math.Pi)
 }
+// Add this function to pkg/astronomy/orbital/elements.go
+
+// CartesianToOrbital converts position and velocity vectors to orbital elements
+func CartesianToOrbital(pos, vel astromath.Vector3, mu float64) OrbitalElements {
+    // Specific angular momentum
+    h := pos.Cross(vel)
+    
+    // Eccentricity vector
+    r := pos.Magnitude()
+    v := vel.Magnitude()
+    eVec := vel.Cross(h).Scale(1.0/mu).Sub(pos.Scale(1.0/r))
+    e := eVec.Magnitude()
+    
+    // Semi-major axis
+    a := 1.0 / (2.0/r - v*v/mu)
+    
+    // Inclination
+    i := math.Acos(h.Z / h.Magnitude())
+    
+    // Longitude of ascending node
+    n := astromath.Vector3{0, 0, 1}.Cross(h)
+    Omega := 0.0
+    if n.Magnitude() > 1e-10 {
+        Omega = math.Atan2(n.Y, n.X)
+        if Omega < 0 {
+            Omega += 2 * math.Pi
+        }
+    }
+    
+    // Argument of perihelion
+    omega := 0.0
+    if n.Magnitude() > 1e-10 && e > 1e-10 {
+        cosOmega := n.Dot(eVec) / (n.Magnitude() * e)
+        if math.Abs(cosOmega) <= 1.0 {
+            omega = math.Acos(cosOmega)
+            if eVec.Z < 0 {
+                omega = 2*math.Pi - omega
+            }
+        }
+    }
+    
+    // Mean anomaly
+    cosE := (1 - r/a) / e
+    E := 0.0
+    if math.Abs(cosE) <= 1.0 {
+        E = math.Acos(cosE)
+        if pos.Dot(vel) < 0 {
+            E = 2*math.Pi - E
+        }
+    }
+    M := E - e*math.Sin(E)
+    
+    return OrbitalElements{
+        SemiMajorAxis:          a,
+        Eccentricity:           e,
+        Inclination:            i,
+        LongitudeAscendingNode: Omega,
+        ArgumentPerihelion:     omega,
+        MeanAnomaly:            M,
+    }
+}
