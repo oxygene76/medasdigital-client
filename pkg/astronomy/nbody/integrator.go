@@ -58,7 +58,7 @@ func (s *System) Integrate(duration, timestep float64) []Snapshot {
     })
     
     for i := 0; i < steps; i++ {
-        s.leapfrogStep(timestep)
+        s.LeapfrogStep(timestep)  // <- Fixed: capitalized L
         
         // Store snapshot every 100 steps
         if (i+1)%100 == 0 {
