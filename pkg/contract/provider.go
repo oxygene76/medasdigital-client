@@ -392,6 +392,24 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
                             }
                      
 
+func (p *ProviderNode) processWebSocketMessage(msg map[string]interface{}, ctx context.Context) {
+    if result, ok := msg["result"].(map[string]interface{}); ok {
+        if events, ok := result["events"].(map[string]interface{}); ok {
+            p.handleJobEvent(ctx, events)
+        } else if data, ok := result["data"].(map[string]interface{}); ok {
+            if value, ok := data["value"].(map[string]interface{}); ok {
+                if txResult, ok := value["TxResult"].(map[string]interface{}); ok {
+                    if result, ok := txResult["result"].(map[string]interface{}); ok {
+                        if evts, ok := result["events"].([]interface{}); ok {
+                            p.handleJobEventArray(ctx, evts)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+    
 func (p *ProviderNode) handleJobEventArray(ctx context.Context, events []interface{}) {
     for _, evt := range events {
         if event, ok := evt.(map[string]interface{}); ok {
