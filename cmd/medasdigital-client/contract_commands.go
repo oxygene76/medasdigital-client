@@ -269,6 +269,54 @@ var contractHeartbeatCmd = &cobra.Command{
         return nil
     },
 }
+var contractConfigCmd = &cobra.Command{
+    Use:   "get-config",
+    Short: "Get contract configuration (v2.0)",
+    RunE: func(cmd *cobra.Command, args []string) error {
+        cfg := loadConfig()
+        
+        contractAddr, _ := cmd.Flags().GetString("contract")
+        
+        query := `{"get_config":{}}`
+        
+        execCmd := exec.Command(
+            "medasdigitald", "query", "wasm", "contract-state", "smart",
+            contractAddr, query,
+            "--node", cfg.Chain.RPCEndpoint,
+            "--output", "json",
+        )
+        
+        output, err := execCmd.Output()
+        if err != nil {
+            return fmt.Errorf("query failed: %w", err)
+        }
+        
+        var result struct {
+            Data struct {
+                CommunityPool         string `json:"community_pool"`
+                CommunityFeePercent   int    `json:"community_fee_percent"`
+                DefaultJobTimeout     int    `json:"default_job_timeout"`
+                HeartbeatTimeout      int    `json:"heartbeat_timeout"`
+                Paused                bool   `json:"paused"`
+            } `json:"data"`
+        }
+        
+        if err := json.Unmarshal(output, &result); err != nil {
+            return err
+        }
+        
+        fmt.Println("=== Contract Configuration v2.0 ===")
+        fmt.Printf("Community Pool: %s\n", result.Data.CommunityPool)
+        fmt.Printf("Community Fee: %d%%\n", result.Data.CommunityFeePercent)
+        fmt.Printf("Job Timeout: %d seconds (%d minutes)\n", 
+            result.Data.DefaultJobTimeout, result.Data.DefaultJobTimeout/60)
+        fmt.Printf("Heartbeat Timeout: %d seconds (%d hours)\n", 
+            result.Data.HeartbeatTimeout, result.Data.HeartbeatTimeout/3600)
+        fmt.Printf("Contract Paused: %v\n", result.Data.Paused)
+        
+        return nil
+    },
+}
 var contractProviderNodeCmd = &cobra.Command{
     Use:   "provider-node",
     Short: "Run provider node",
@@ -404,6 +452,7 @@ func init() {
     contractCmd.AddCommand(contractSubmitJobCmd)
     contractCmd.AddCommand(contractGetJobCmd)
     contractCmd.AddCommand(contractCancelJobCmd)      // ADD
+    contractCmd.AddCommand(contractConfigCmd)  
     contractCmd.AddCommand(contractHeartbeatCmd)      // ADD
     contractCmd.AddCommand(contractProviderNodeCmd)
     
