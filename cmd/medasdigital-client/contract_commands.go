@@ -195,6 +195,80 @@ var contractGetJobCmd = &cobra.Command{
         return nil
     },
 }
+
+// KOMPLETT NEU - Diese Commands einfügen:
+
+var contractCancelJobCmd = &cobra.Command{
+    Use:   "cancel-job",
+    Short: "Cancel a job within 5 minutes (v2.0)",
+    RunE: func(cmd *cobra.Command, args []string) error {
+        cfg := loadConfig()
+        
+        contractAddr, _ := cmd.Flags().GetString("contract")
+        jobID, _ := cmd.Flags().GetUint64("job-id")
+        from, _ := cmd.Flags().GetString("from")
+        
+        msg := fmt.Sprintf(`{"cancel_job":{"job_id":%d}}`, jobID)
+        
+        execCmd := exec.Command(
+            "medasdigitald", "tx", "wasm", "execute",
+            contractAddr, msg,
+            "--from", from,
+            "--keyring-backend", cfg.Client.KeyringBackend,
+            "--gas", "auto",
+            "--gas-adjustment", "1.3",
+            "--gas-prices", "0.025umedas",
+            "--node", cfg.Chain.RPCEndpoint,
+            "--chain-id", cfg.Chain.ID,
+            "-y",
+        )
+        
+        output, err := execCmd.CombinedOutput()
+        if err != nil {
+            return fmt.Errorf("cancel failed: %w\nOutput: %s", err, output)
+        }
+        
+        fmt.Printf("✅ Job #%d cancelled successfully\n", jobID)
+        fmt.Println("Full refund will be processed")
+        
+        return nil
+    },
+}
+
+var contractHeartbeatCmd = &cobra.Command{
+    Use:   "heartbeat",
+    Short: "Send manual heartbeat (v2.0)",
+    RunE: func(cmd *cobra.Command, args []string) error {
+        cfg := loadConfig()
+        
+        contractAddr, _ := cmd.Flags().GetString("contract")
+        from, _ := cmd.Flags().GetString("from")
+        
+        msg := `{"heart_beat":{}}`
+        
+        execCmd := exec.Command(
+            "medasdigitald", "tx", "wasm", "execute",
+            contractAddr, msg,
+            "--from", from,
+            "--keyring-backend", cfg.Provider.KeyringBackend,
+            "--gas", "auto",
+            "--gas-adjustment", "1.3",
+            "--gas-prices", "0.025umedas",
+            "--node", cfg.Chain.RPCEndpoint,
+            "--chain-id", cfg.Chain.ID,
+            "-y",
+        )
+        
+        output, err := execCmd.CombinedOutput()
+        if err != nil {
+            return fmt.Errorf("heartbeat failed: %w\nOutput: %s", err, output)
+        }
+        
+        fmt.Println("💓 Heartbeat sent successfully")
+        
+        return nil
+    },
+}
 var contractProviderNodeCmd = &cobra.Command{
     Use:   "provider-node",
     Short: "Run provider node",
@@ -332,6 +406,8 @@ func init() {
     contractCmd.AddCommand(contractListProvidersCmd)
     contractCmd.AddCommand(contractSubmitJobCmd)
     contractCmd.AddCommand(contractGetJobCmd)
+    contractCmd.AddCommand(contractCancelJobCmd)      // ADD
+    contractCmd.AddCommand(contractHeartbeatCmd)      // ADD
     contractCmd.AddCommand(contractProviderNodeCmd)
     
     contractCmd.PersistentFlags().String("contract",
@@ -361,4 +437,14 @@ func init() {
     // contractProviderNodeCmd.MarkFlagRequired("endpoint")
 
     contractProviderNodeCmd.Flags().Bool("register", false, "Register provider first")
+
+    // Cancel job flags
+    contractCancelJobCmd.Flags().Uint64("job-id", 0, "Job ID (required)")
+    contractCancelJobCmd.Flags().String("from", "", "Client key (required)")
+    contractCancelJobCmd.MarkFlagRequired("job-id")
+    contractCancelJobCmd.MarkFlagRequired("from")
+
+    // Heartbeat flags
+    contractHeartbeatCmd.Flags().String("from", "", "Provider key (required)")
+    contractHeartbeatCmd.MarkFlagRequired("from")
 }
