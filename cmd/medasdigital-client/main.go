@@ -103,6 +103,7 @@ type Config struct {
         Port                 int    `yaml:"port"`
         Workers              int    `yaml:"workers"`
         HarvestIntervalHours int    `yaml:"harvest_interval_hours"`
+		HeartbeatIntervalMinutes int `yaml:"heartbeat_interval_minutes"`
     } `yaml:"provider"`
     GPU struct {
         Enabled     bool `yaml:"enabled"`
