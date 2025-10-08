@@ -226,51 +226,48 @@ func addOuterPlanets(system *nbody.System) {
     }
 }
 
-// analyzeETNOChanges compares initial and final ETNO orbits
-func analyzeETNOChanges(history [][]nbody.Body, initialETNOs []orbital.OrbitalElements, 
-                        system *nbody.System) []ETNOEffect {
-    effects := make([]ETNOEffect, 0)
-    
+// Update this function in pkg/astronomy/planet9/search.go
+
+func analyzeETNOChanges(history []nbody.Snapshot, initialETNOs []orbital.OrbitalElements) []ETNOEffect {
     if len(history) == 0 {
-        return effects
+        return nil
     }
     
-    // Get final state
-    finalState := history[len(history)-1]
+    effects := make([]ETNOEffect, 0)
+    firstSnap := history[0]
+    lastSnap := history[len(history)-1]
     
-    // Find ETNOs in final state and convert back to orbital elements
-    etnoIndex := 0
-    for _, body := range finalState {
-        if len(body.ID) > 5 && body.ID[:5] == "ETNO_" {
-            if etnoIndex < len(initialETNOs) {
-                // Convert final cartesian to orbital elements
-                finalElements := cartesianToOrbital(body.Position, body.Velocity, system.G)
-                
-                initial := initialETNOs[etnoIndex]
-                
-                // Calculate changes
-                perihelionShift := finalElements.SemiMajorAxis*(1-finalElements.Eccentricity) - 
-                                  initial.SemiMajorAxis*(1-initial.Eccentricity)
-                
-                inclinationChange := (finalElements.Inclination - initial.Inclination) * 180 / math.Pi
-                
-                // Longitude of perihelion change
-                initialLongPeri := math.Mod(initial.LongitudeAscendingNode + initial.ArgumentPerihelion, 2*math.Pi)
-                finalLongPeri := math.Mod(finalElements.LongitudeAscendingNode + finalElements.ArgumentPerihelion, 2*math.Pi)
-                longPeriChange := (finalLongPeri - initialLongPeri) * 180 / math.Pi
-                
-                effects = append(effects, ETNOEffect{
-                    ObjectID:          body.ID,
-                    InitialElements:   initial,
-                    FinalElements:     finalElements,
-                    PerihelionShift:   perihelionShift,
-                    InclinationChange: inclinationChange,
-                    LongPeriChange:    longPeriChange,
-                })
-                
-                etnoIndex++
-            }
+    // Skip Sun and Planet9, analyze ETNOs
+    etnoStart := 2 // Index where ETNOs start (after Sun and Planet9)
+    
+    for i := 0; i < len(initialETNOs) && etnoStart+i < len(lastSnap.Bodies); i++ {
+        initial := firstSnap.Bodies[etnoStart+i]
+        final := lastSnap.Bodies[etnoStart+i]
+        
+        // Skip if positions are invalid
+        if initial.Position.IsZero() || final.Position.IsZero() {
+            continue
         }
+        
+        // Convert to orbital elements using solar gravitational parameter
+        mu := 4 * math.Pi * math.Pi // In AU^3/year^2 units
+        
+        initialOrb := orbital.CartesianToOrbital(initial.Position, initial.Velocity, mu)
+        finalOrb := orbital.CartesianToOrbital(final.Position, final.Velocity, mu)
+        
+        // Calculate changes
+        perihelionInitial := initialOrb.SemiMajorAxis * (1 - initialOrb.Eccentricity)
+        perihelionFinal := finalOrb.SemiMajorAxis * (1 - finalOrb.Eccentricity)
+        
+        effect := ETNOEffect{
+            ObjectID:          fmt.Sprintf("ETNO_%d", i),
+            InitialElements:   initialETNOs[i],
+            FinalElements:     finalOrb,
+            PerihelionShift:   perihelionFinal - perihelionInitial,
+            InclinationChange: (finalOrb.Inclination - initialOrb.Inclination) * 180.0 / math.Pi,
+        }
+        
+        effects = append(effects, effect)
     }
     
     return effects
