@@ -1,43 +1,49 @@
-# MedasDigital Client - Planet 9 Analysis
+# MedasDigital Client v2.0
 
-A distributed astronomical analysis client for the search of Planet 9 and other trans-Neptunian objects (TNOs) using the MedasDigital blockchain infrastructure.
+A blockchain-based distributed computing client for the Medas Digital network, featuring smart contract v2.0 with enhanced security and reliability features for computation providers.
 
 ## 🌌 Overview
 
-The MedasDigital Client is a specialized tool designed to perform distributed astronomical data analysis for the ongoing search for Planet 9 and other distant objects in our solar system. Built on the MedasDigital blockchain, it enables researchers to contribute computational resources while maintaining transparent, verifiable, and immutable records of analysis results.
+The MedasDigital Client is a comprehensive tool for participating in the MedasDigital distributed computing network. It enables both computation providers to offer services and clients to submit jobs, all managed through blockchain smart contracts with transparent, verifiable, and immutable records.
 
-## 🎉 Current Status - **BLOCKCHAIN INFRASTRUCTURE COMPLETE**
+## 🎉 Current Status - **v2.0 FEATURES COMPLETE**
 
-### ✅ **Fully Functional - Blockchain Integration**
+### ✅ **Smart Contract v2.0 - Production Ready**
+- **Heartbeat Monitoring**: Providers stay active with 24-hour timeout protection
+- **Job Management**: Submit, cancel, and fail jobs with automatic refunds
+- **WebSocket Stability**: Auto-reconnection prevents provider crashes
+- **Timeout Processing**: Jobs auto-expire after 1 hour with full refund
+- **Balance Harvesting**: Automatic fund management for providers
+
+### ✅ **Blockchain Infrastructure - Proven**
 - **Real blockchain transactions**: Successfully tested on MedasDigital mainnet
-- **Client registration**: Working registration system with permanent client IDs  
+- **Client registration**: Working registration system with permanent client IDs
 - **Key management**: Full key lifecycle management (create, recover, list, delete)
 - **Account verification**: Comprehensive blockchain account status checking
-- **Local storage**: Automatic backup of registrations in JSON format
+- **Smart Contract**: v2.0 deployed at `medas1xr3rq8yvd7qplsw5yx90ftsr2zdhg4e9z60h5duusgxpv72hud3s3cca97`
 
-**Latest Success**: Client ID `client-071be41f` successfully registered on block 3,565,770
-Transaction: [393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF](https://explorer.medas-digital.io:3100/medasdigital/tx/393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF)
+## 🚀 Features
 
-### 🚧 **In Development - Scientific Analysis**
-- **Orbital dynamics analysis**: Framework planned, not yet implemented
-- **Photometric processing**: Data structures designed, processing pipeline in development  
-- **GPU acceleration**: Infrastructure ready, analysis algorithms pending
-- **AI/ML integration**: Architecture planned, models not yet trained
-- **Survey data processing**: Format support planned, automation pending
+### Provider Features (v2.0)
+- **Automatic Heartbeat**: Keep provider active without manual intervention
+- **WebSocket Reconnection**: No more crashes after network issues
+- **Job Processing**: Automatic job assignment via WebSocket
+- **Failed Job Handling**: Mark jobs as failed with automatic refunds
+- **Balance Management**: Auto-harvest excess funds to funding address
+- **HTTP Health API**: Monitor provider status via REST endpoints
 
-**Current Focus**: Building the scientific analysis pipeline on top of the proven blockchain foundation.
+### Client Features
+- **Job Submission**: Submit computing jobs with automatic provider matching
+- **Job Cancellation**: Cancel within 5 minutes for full refund
+- **Status Tracking**: Monitor job progress and results
+- **Multiple Job Types**: PI calculation, orbital dynamics, photometric analysis
 
-## 🔬 Scientific Background
-
-Planet 9 is a hypothetical planet in the outer reaches of our solar system, first proposed based on the unusual clustering of orbits of several trans-Neptunian objects (TNOs). This client provides the foundation infrastructure for distributed analysis of astronomical data.
-
-This client currently provides:
-- **✅ Blockchain Foundation**: Complete client registration and identity management
-- **✅ Network Integration**: Full MedasDigital blockchain connectivity
-- **✅ Capability Declaration**: Register your intended analysis capabilities
-- **🚧 Analysis Pipeline**: Scientific algorithms in active development
-- **🚧 Data Processing**: Astronomical data formats and processing (planned)
-- **🚧 GPU Acceleration**: Hardware integration framework (in progress)
+### Security Features
+- **Provider Inactivity Detection**: 24-hour heartbeat timeout
+- **Job Timeouts**: 1-hour automatic expiry with refund
+- **Emergency Pause**: Contract-wide pause capability
+- **Rate Limiting**: Protection for free test services
+- **Secure WebSocket**: Ping/pong keep-alive mechanism
 
 ## 🛠️ Installation & Build
 
@@ -92,113 +98,301 @@ make install
 ./bin/medasdigital-client init
 ```
 
-This creates `~/.medasdigital-client/config.yaml`:
+### Provider Configuration
+
+Edit `~/.medasdigital-client/config.yaml`:
 
 ```yaml
 chain:
-  chain_id: medasdigital-2
-  rpc_endpoint: https://rpc.medas-digital.io:26657
-  bech32_prefix: medas
-  base_denom: umedas
+    chain_id: medasdigital-2
+    rpc_endpoint: https://rpc.medas-digital.io:26657
+    bech32_prefix: medas
+    base_denom: umedas
+
+provider:
+    enabled: true
+    key_name: "test-provider"
+    keyring_backend: "test"
+    funding_address: "medas1kc7lctfazdpd8y6ecapdfv3d6ch97prc58qaem"
+    min_balance: 50000000
+    max_balance: 100000000
+    endpoint: "https://provider.medas-digital.io:8080"
+    port: 8080
+    workers: 4
+    harvest_interval_hours: 1
+    heartbeat_interval_minutes: 360  # 6 hours recommended
+
+contract:
+    address: medas1xr3rq8yvd7qplsw5yx90ftsr2zdhg4e9z60h5duusgxpv72hud3s3cca97
+
 client:
-  keyring_dir: /home/user/.medasdigital-client/keyring
-  keyring_backend: test
-  capabilities:
-    - orbital_dynamics
-    - photometric_analysis
+    keyring_dir: /root/.medasdigital/
+    keyring_backend: test
+    capabilities:
+        - orbital_dynamics
+        - photometric_analysis
+
 gpu:
-  enabled: false
-  device_id: 0
-  memory_limit: 8192
+    enabled: false
+    device_id: 0
+    memory_limit: 8192
 ```
 
 ## 🔑 Key Management
 
-### Create Your Identity
-
 ```bash
 # Create a new key (generates mnemonic)
-./bin/medasdigital-client keys add MyAnalysisNode
+./bin/medasdigital-client keys add provider-key
 
-# Or recover from existing mnemonic
-./bin/medasdigital-client keys add MyAnalysisNode --recover
+# Recover from existing mnemonic
+./bin/medasdigital-client keys add provider-key --recover
 
 # List all keys
 ./bin/medasdigital-client keys list
 
 # Show specific key details
-./bin/medasdigital-client keys show MyAnalysisNode
+./bin/medasdigital-client keys show provider-key
+
+# Delete a key
+./bin/medasdigital-client keys delete provider-key
 ```
 
-## 📊 Usage
+## 📊 Provider Operations
 
-### 1. Register Your Analysis Node
+### 1. Register and Start Provider
 
 ```bash
-# Register on the blockchain with default capabilities
-./bin/medasdigital-client register --from MyAnalysisNode
+# Register provider with contract v2.0
+./bin/medasdigital-client contract provider-node --register
 
-# Register with custom capabilities and metadata
-./bin/medasdigital-client register \
-  --from MyAnalysisNode \
-  --capabilities orbital_dynamics,photometric_analysis,ai_training \
-  --metadata "Institution: Your Observatory, Location: Chile"
-
-# Register with manual gas limit
-./bin/medasdigital-client register \
-  --from MyAnalysisNode \
-  --gas 200000
+# Start provider node (includes all v2.0 features)
+./bin/medasdigital-client contract provider-node
 ```
 
-**Successful Registration Output:**
+**Provider v2.0 Output:**
 ```
-🎉 CLIENT SUCCESSFULLY REGISTERED ON BLOCKCHAIN!
-===================================================
-🆔 Client ID: client-071be41f
-📍 Address: medas1y0n5v8m0jn0mp37vp74qjq3nfk7zf6ahsgywwr
-⛓️  Chain: medasdigital-2
-🔧 Capabilities: [orbital_dynamics photometric_analysis]
-📊 Transaction Hash: 393AAB8CA6273CEC7CCC49A3AB8D3E81E133329267322D0A5799CF7AF5FE55EF
-🏔️  Block Height: 3565770
-💾 Registration saved to: ~/.medasdigital-client/registrations/
-===================================================
+=== Provider Node v2.0 ===
+Provider Address: medas1f5zg2ju7r4ls988vhlx6sr4nj0l9lpvwgeu0gt
+Contract (v2.0): medas1xr3rq8yvd7qplsw5yx90ftsr2zdhg4e9z60h5duusgxpv72hud3s3cca97
+Heartbeat: every 360 minutes
+✅ Provider registered
+🚀 Starting with v2.0 features:
+  ✅ Automatic heartbeat every 360 minutes
+  ✅ WebSocket auto-reconnection
+  ✅ Job failure handling with refunds
+  ✅ Balance auto-harvesting
+2025/10/08 16:23:43 Provider Node Started (v2.0)
+2025/10/08 16:23:43   Name: MEDAS Provider Node v2.0
+2025/10/08 16:23:43   Address: medas1f5zg2ju7r4ls988vhlx6sr4nj0l9lpvwgeu0gt
+2025/10/08 16:23:43   Endpoint: https://provider.medas-digital.io:8080
+2025/10/08 16:23:43   Listening for jobs...
+2025/10/08 16:23:43 ✅ WebSocket connected and subscribed
 ```
 
-### 2. Verify Your Account
+### 2. Monitor Provider Health
 
 ```bash
-# Check account status on blockchain
-./bin/medasdigital-client check-account --from MyAnalysisNode
+# Check on-chain status
+./bin/medasdigital-client contract provider-status
 
-# Or check specific address
-./bin/medasdigital-client check-account medas1y0n5v8m0jn0mp37vp74qjq3nfk7zf6ahsgywwr
+# HTTP health check
+curl http://localhost:8080/health
+
+# Response includes heartbeat info:
+{
+  "status": "healthy",
+  "provider": "medas1f5zg2ju7r4ls988vhlx6sr4nj0l9lpvwgeu0gt",
+  "heartbeat": {
+    "last_sent": "2025-10-08T18:04:28Z",
+    "seconds_ago": 30,
+    "minutes_ago": 0,
+    "active": true,
+    "next_in": "5h59m30s"
+  },
+  "websocket_connected": true,
+  "reconnect_attempts": 0
+}
 ```
 
-### 3. Monitor Status
+### 3. View Job Results
 
 ```bash
-# Check client status
-./bin/medasdigital-client status
+# Access completed job results
+curl http://localhost:8080/results/pi_calculation-1.json
+```
 
-# Check blockchain connection
-./bin/medasdigital-client check-account --from MyAnalysisNode
+## 💼 Client Operations
+
+### Submit Computing Job
+
+```bash
+# Submit PI calculation job
+./bin/medasdigital-client contract submit-job \
+  --type pi_calculation \
+  --digits 1000 \
+  --from client-key \
+  --payment 1000000umedas
+```
+
+### Cancel Job (within 5 minutes)
+
+```bash
+./bin/medasdigital-client contract cancel-job \
+  --job-id 1 \
+  --from client-key
+```
+
+### Check Job Status
+
+```bash
+./bin/medasdigital-client contract get-job --job-id 1
+```
+
+## 🔧 Contract Management
+
+### View Configuration
+
+```bash
+./bin/medasdigital-client contract get-config
+
+# Output:
+=== Contract Configuration v2.0 ===
+Community Pool: medas1kc7lctfazdpd8y6ecapdfv3d6ch97prc58qaem
+Community Fee: 15%
+Job Timeout: 3600 seconds (60 minutes)
+Heartbeat Timeout: 86400 seconds (24 hours)
+Contract Paused: false
+```
+
+### Manual Operations
+
+```bash
+# Send manual heartbeat
+./bin/medasdigital-client contract heartbeat --from provider-key
+
+# List all providers
+./bin/medasdigital-client contract list-providers
+```
+
+## 🌐 Network Information
+
+### Smart Contract v2.0
+- **Address**: `medas1xr3rq8yvd7qplsw5yx90ftsr2zdhg4e9z60h5duusgxpv72hud3s3cca97`
+- **Community Pool**: `medas1kc7lctfazdpd8y6ecapdfv3d6ch97prc58qaem`
+- **Fee Structure**: 85% provider, 15% community
+
+### Timeouts and Limits
+- **Job Timeout**: 1 hour (automatic refund)
+- **Heartbeat Timeout**: 24 hours (provider marked inactive)
+- **Cancel Window**: 5 minutes after submission
+- **WebSocket Reconnect**: Max 10 attempts with exponential backoff
+
+### Mainnet Configuration
+- **Chain ID**: `medasdigital-2`
+- **RPC Endpoint**: `https://rpc.medas-digital.io:26657`
+- **Block Explorer**: `https://explorer.medas-digital.io:3100`
+- **Denomination**: `umedas` (1 MEDAS = 1,000,000 umedas)
+
+## 📈 Job Lifecycle
+
+1. **Submit**: Client submits job with payment
+2. **Assign**: Contract assigns to active provider
+3. **Process**: Provider executes computation
+4. **Complete/Fail**: Provider submits result or marks failed
+5. **Payment**: Automatic distribution (85% provider, 15% community)
+
+### Automatic Safety Features
+- ⏱️ Jobs timeout after 1 hour → automatic refund
+- 💔 Provider disconnects → job reassigned
+- ❌ Job fails → automatic refund minus gas
+- 🚫 Provider inactive 24h → removed from active pool
+
+## 🛠️ Free Test Service
+
+Run limited free computation service:
+
+```bash
+# Start free service (max 100 digits, rate limited)
+./bin/medasdigital-client serve --port 8080
+
+# Direct PI calculation (max 1000 digits for CLI)
+./bin/medasdigital-client pi calculate 100
+```
+
+## 🐛 Troubleshooting
+
+### Provider Issues
+
+**Not receiving jobs:**
+```bash
+# Check registration
+./bin/medasdigital-client contract list-providers
+
+# Verify heartbeat
+curl http://localhost:8080/health | jq .heartbeat
+
+# Check WebSocket in logs
+grep "WebSocket connected" provider.log
+```
+
+**WebSocket crashes (fixed in v2.0):**
+- Auto-reconnection with exponential backoff
+- Max 10 attempts before giving up
+- Ping/pong keep-alive every 30 seconds
+
+### Balance Management
+
+Enable auto-harvesting:
+```yaml
+provider:
+    funding_address: "medas1..."
+    min_balance: 50000000    # Keep minimum
+    max_balance: 100000000    # Harvest excess
+    harvest_interval_hours: 1
+```
+
+### Client Issues
+
+**Insufficient funds:**
+```bash
+# Check account balance
+./bin/medasdigital-client check-account --from client-key
+
+# Fund account
+medasdigitald tx bank send <from-wallet> <client-address> 10000000umedas \
+  --keyring-backend test \
+  --chain-id medasdigital-2 \
+  --node https://rpc.medas-digital.io:26657 \
+  -y
+```
+
+**Key not found:**
+```bash
+# Create key first
+./bin/medasdigital-client keys add client-key
+
+# Or recover from mnemonic
+./bin/medasdigital-client keys add client-key --recover
 ```
 
 ## 📁 Local Storage
 
-### Registration Files
-
-Your registrations are automatically saved locally:
-
+### Registration Data
 ```bash
-# View your registration
-cat ~/.medasdigital-client/registrations/registration-client-071be41f.json
+# View registrations
+ls ~/.medasdigital-client/registrations/
 
-# View all registrations index
-cat ~/.medasdigital-client/registrations/index.json
+# View registration details
+cat ~/.medasdigital-client/registrations/registration-*.json
+```
 
-# List all registration files
-ls -la ~/.medasdigital-client/registrations/
+### Logs and State
+```bash
+# Provider logs
+tail -f ~/.medasdigital-client/provider.log
+
+# View job results
+ls ~/.medasdigital-client/results/
 ```
 
 ### Registration Data Format
@@ -219,178 +413,127 @@ ls -la ~/.medasdigital-client/registrations/
 }
 ```
 
-## 🔧 Advanced Usage
+## 🔐 Security
 
-### Custom Configuration
+- **Keyring Security**: Cosmos SDK keyring with configurable backend
+- **Transaction Signing**: All transactions cryptographically signed
+- **WebSocket Security**: TLS encryption with auto-reconnection
+- **Rate Limiting**: Built-in protection for public endpoints
+- **Job Verification**: On-chain result hashes for verification
 
-```bash
-# Use custom config file
-./bin/medasdigital-client --config /path/to/config.yaml register --from MyKey
+## 📄 Version History
 
-# Use custom home directory
-./bin/medasdigital-client --home /path/to/data register --from MyKey
+### v2.0.0 (Current)
+- Smart contract v2.0 with heartbeat system
+- WebSocket auto-reconnection (no more crashes)
+- Job cancellation and failure handling
+- Automatic refunds for timeouts/failures
+- Provider health monitoring API
+- Balance auto-harvesting
+- Emergency pause capability
 
-# Use different keyring backend
-./bin/medasdigital-client register --from MyKey --keyring-backend file
-```
+### v1.0.0
+- Initial release
+- Basic job submission and processing
+- Blockchain registration system
+- Key management
+- Manual provider management
 
-### Development Mode
-
-```bash
-# Build with debug info
-make build-debug
-
-# Run with verbose logging
-./bin/medasdigital-client register --from MyKey --verbose
-
-# Test configuration
-./bin/medasdigital-client config validate
-```
-
-## 🌐 Network Configuration
-
-### Mainnet (Default)
-- **Chain ID**: `medasdigital-2`
-- **RPC Endpoint**: `https://rpc.medas-digital.io:26657`
-- **Explorer**: `https://explorer.medas-digital.io`
-- **Denomination**: `umedas` (micro-medas)
-
-### Gas and Fees
-- **Recommended Gas**: 200,000 for registration
-- **Fee Calculation**: Automatic (minimum 5,000 umedas)
-- **Typical Cost**: ~0.005 MEDAS per registration
-
-## 🚀 Future Features (Roadmap)
-
-### Phase 1: Foundation ✅ **COMPLETED**
-- [x] Blockchain integration with Cosmos SDK v0.50.10
-- [x] Client registration system with permanent on-chain storage
-- [x] Comprehensive key management and security
-- [x] Local storage and backup systems
-- [x] Account verification and status checking
-- [x] Gas optimization and fee calculation
-
-### Phase 2: Analysis Framework 🚧 **IN DEVELOPMENT**
-- [ ] Orbital dynamics analysis pipeline
-- [ ] Photometric data processing modules
-- [ ] GPU acceleration integration (CUDA/OpenCL)
-- [ ] AI/ML model framework integration
-- [ ] Distributed computation coordination
-- [ ] Data format standardization (FITS, CSV, JSON)
-
-### Phase 3: Advanced Analytics 📋 **PLANNED**
-- [ ] Real-time survey data processing
-- [ ] Collaborative analysis verification system
-- [ ] Multi-institutional data sharing protocols
-- [ ] Publication-ready result generation
-- [ ] Integration with major observatories and surveys
-
-## 🛠️ Development
-
-### Build from Source
-
-```bash
-# Clone repository
-git clone https://github.com/oxygene76/medasdigital-client.git
-cd medasdigital-client
-
-# Install dependencies
-go mod tidy
-
-# Run tests
-go test -v ./...
-
-# Build
-make build
-
-# Install locally
-make install
-```
-
-### Project Structure
+## 📄 Project Structure
 
 ```
 medasdigital-client/
 ├── cmd/medasdigital-client/    # Main application
+│   ├── main.go                 # Entry point
+│   ├── config.go               # Configuration
+│   ├── contract_commands.go    # Contract interactions
+│   └── payment_service.go      # Payment processing
 ├── pkg/
 │   ├── client/                 # Client logic
 │   ├── blockchain/             # Blockchain integration
-│   ├── analysis/               # Analysis algorithms
-│   └── gpu/                    # GPU acceleration
-├── internal/types/             # Internal types
+│   ├── contract/               # Smart contract interface
+│   │   ├── provider.go         # Provider node implementation
+│   │   └── types.go            # Contract types
+│   ├── compute/                # Computation engines
+│   └── analysis/               # Analysis algorithms
 ├── Makefile                    # Build configuration
 ├── go.mod                      # Go dependencies
 └── README.md                   # This file
 ```
 
-## 🔐 Security
-
-- **Keyring Security**: Uses Cosmos SDK keyring with multiple backend options
-- **Transaction Signing**: All transactions are cryptographically signed
-- **Local Storage**: Registration data backed up locally in JSON format
-- **Blockchain Verification**: All registrations are permanently stored on-chain
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Key not found:**
-```bash
-# Create a key first
-./bin/medasdigital-client keys add MyAnalysisNode
-```
-
-**Insufficient funds:**
-```bash
-# Check account status
-./bin/medasdigital-client check-account --from MyAnalysisNode
-# Ensure your account has umedas tokens for transaction fees
-```
-
-**Connection issues:**
-```bash
-# Test blockchain connection
-curl -s https://rpc.medas-digital.io:26657/status
-```
-
-**Build issues:**
-```bash
-# Clean and rebuild
-make clean
-go mod tidy
-make build
-```
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 🌟 Acknowledgments
 
+- **Cosmos SDK** team for blockchain infrastructure
+- **MedasDigital** community for network support
+- **CosmWasm** for smart contract capabilities
 - **Mike Brown** and **Konstantin Batygin** for the original Planet 9 hypothesis
-- **Minor Planet Center** for maintaining the TNO database
-- **Cosmos SDK** for blockchain infrastructure
-- **MedasDigital** for the blockchain network
 
-## 📞 Contact
+## 📞 Support
 
-- **Project Repository**: https://github.com/oxygene76/medasdigital-client
-- **Technical Support**: support@medas-digital.io
-- **Scientific Inquiries**: science@medas-digital.io
-- **Blockchain Explorer**: https://explorer.medas-digital.io:3100
+- **GitHub**: https://github.com/oxygene76/medasdigital-client
+- **Chain RPC**: https://rpc.medas-digital.io:26657
+- **Documentation**: https://docs.medas-digital.io
+- **Support Email**: support@medas-digital.io
+- **Block Explorer**: https://explorer.medas-digital.io:3100
 
 ---
 
-**🚀 Ready to join the network infrastructure? Get started in 3 commands:**
+## 🚀 Quick Start Guide
+
+### For Providers
 
 ```bash
+# 1. Build and initialize
 make build
 ./bin/medasdigital-client init
-./bin/medasdigital-client keys add MyAnalysisNode
-./bin/medasdigital-client register --from MyAnalysisNode
+
+# 2. Create provider key and fund it
+./bin/medasdigital-client keys add my-provider
+# Get address and send MEDAS tokens to it
+
+# 3. Configure provider in config.yaml
+# Edit: ~/.medasdigital-client/config.yaml
+
+# 4. Register and start provider
+./bin/medasdigital-client contract provider-node --register
 ```
 
-*Join the distributed blockchain network for Planet 9 research - register your node and prepare for upcoming scientific analysis capabilities!*
+### For Clients
 
-**📊 Current Capabilities**: Blockchain client registration and network participation  
-**🔬 Coming Soon**: Full astronomical analysis pipeline and GPU-accelerated computations
+```bash
+# 1. Create client key and fund it
+./bin/medasdigital-client keys add my-client
+# Get address and send MEDAS tokens to it
+
+# 2. Submit a job
+./bin/medasdigital-client contract submit-job \
+  --type pi_calculation \
+  --digits 1000 \
+  --from my-client \
+  --payment 1000000umedas
+
+# 3. Check job status
+./bin/medasdigital-client contract get-job --job-id 1
+```
+
+### Monitor Operations
+
+```bash
+# Provider health check
+curl http://localhost:8080/health | jq
+
+# Contract status
+./bin/medasdigital-client contract get-config
+
+# List all providers
+./bin/medasdigital-client contract list-providers
+
+# Check your balance
+./bin/medasdigital-client check-account --from my-key
+```
+
+---
+
+**Version 2.0** - Production Ready with Enhanced Security and Reliability
+
+*Join the MedasDigital distributed computing network today!*
