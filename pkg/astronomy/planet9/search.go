@@ -152,7 +152,7 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
     }
     
     // Calculate ETNO effects and clustering
-    result.ETNOEffects = analyzeETNOChanges(history, initialETNOs, system)
+    result.ETNOEffects = analyzeETNOChanges(history, etnos) 
     result.ClusteringScore = calculateClustering(result.ETNOEffects)
     
     return result
