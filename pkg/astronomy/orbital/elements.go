@@ -21,6 +21,8 @@ type OrbitalElements struct {
 // mu is the gravitational parameter (G * M_sun) in AU³/day²
 // ToCartesian converts orbital elements to position and velocity
 // Returns position in AU and velocity in AU/year when mu is in AU³/(M☉·year²)
+// ToCartesian converts orbital elements to position and velocity
+// Returns position in AU and velocity in AU/year when mu is in AU³/(M☉·year²)
 func (o OrbitalElements) ToCartesian(mu float64) (astromath.Vector3, astromath.Vector3) {
     // Solve Kepler's equation for eccentric anomaly
     E := o.MeanAnomaly
@@ -35,14 +37,11 @@ func (o OrbitalElements) ToCartesian(mu float64) (astromath.Vector3, astromath.V
     a := o.SemiMajorAxis
     e := o.Eccentricity
     
-    // Distance from focus
-    r := a * (1 - e*cosE)
-    
     // Position in orbital plane coordinates
     x := a * (cosE - e)
     y := a * math.Sqrt(1-e*e) * sinE
     
-    // FIXED: Velocity in orbital plane (was wrong!)
+    // Velocity in orbital plane
     // Mean motion n = sqrt(mu/a³)
     n := math.Sqrt(mu / (a * a * a))
     
