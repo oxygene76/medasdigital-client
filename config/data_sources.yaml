@@ -1,0 +1,49 @@
+# Data source configuration for astronomical data downloads
+
+minor_planet_center:
+  base_url: "https://www.minorplanetcenter.net"
+  etno_list_url: "https://www.minorplanetcenter.net/iau/lists/TNOs.html"
+  orbital_elements_url: "https://www.minorplanetcenter.net/db_search"
+  
+  # ETNO criteria (Trans-Neptunian Objects with special characteristics)
+  etno_criteria:
+    min_semimajor_axis: 150  # AU
+    min_perihelion: 30       # AU
+    max_eccentricity: 0.99
+    
+jpl_horizons:
+  base_url: "https://ssd.jpl.nasa.gov/horizons_batch.cgi"
+  api_url: "https://ssd.jpl.nasa.gov/api/horizons.api"
+  
+  # Planet IDs in JPL Horizons system
+  planet_ids:
+    jupiter: "599"
+    saturn: "699"
+    uranus: "799"
+    neptune: "899"
+    
+  # Query parameters
+  default_params:
+    format: "json"
+    obj_data: "YES"
+    make_ephem: "NO"
+    center: "@sun"
+    ref_plane: "ECLIPTIC"
+    ref_system: "J2000"
+    
+data_storage:
+  base_dir: "./data"
+  etnos_dir: "etnos"
+  planets_dir: "planets"
+  reference_dir: "reference"
+  
+  # Version control
+  versioning:
+    enabled: true
+    format: "v{year}.{month}.{revision}"
+    
+  # Update checking
+  update_check:
+    enabled: true
+    interval_days: 7
+    hash_algorithm: "sha256"
