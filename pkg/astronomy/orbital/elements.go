@@ -23,7 +23,6 @@ func (oe OrbitalElements) ToCartesian(mu float64) (pos, vel astromath.Vector3) {
     E := oe.solveKeplersEquation()
     
     // True anomaly from eccentric anomaly
-    sinE := math.Sin(E)
     cosE := math.Cos(E)
     
     nu := 2.0 * math.Atan2(
