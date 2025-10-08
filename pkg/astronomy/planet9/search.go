@@ -94,19 +94,17 @@ func GetPresetParameters(preset SearchPreset) SearchParameters {
 
 func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements, 
                    duration float64) SearchResult {
-    // Initialize system with Sun + outer planets + Planet 9 + ETNOs
+    // Initialize system with proper units
     system := nbody.NewSystem()
+    // system.G = 2.959122e-4 (AU³/M☉·day²) is already set correctly
     
-    // Add Sun
+    // Add Sun at origin
     system.Bodies = append(system.Bodies, nbody.Body{
-        ID:   "Sun",
-        Mass: 1.0,
+        ID:       "Sun",
+        Mass:     1.0,  // Solar masses
         Position: astromath.Vector3{0, 0, 0},
         Velocity: astromath.Vector3{0, 0, 0},
     })
-    
-    // Add outer planets (Jupiter, Saturn, Uranus, Neptune)
-    addOuterPlanets(system)
     
     // Add Planet 9
     p9Elements := orbital.OrbitalElements{
@@ -116,35 +114,67 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
         LongitudeAscendingNode: params.LongitudeAscendingNode * math.Pi / 180,
         ArgumentPerihelion:     params.ArgumentPerihelion * math.Pi / 180,
         MeanAnomaly:            0,
-        Epoch:                  2460200.5, // J2000 + 23 years
     }
     
-    p9Pos, p9Vel := p9Elements.ToCartesian(system.G)
+    // Use mu in year units for ToCartesian (which expects year units)
+    muYear := 4 * math.Pi * math.Pi  // AU³/(M☉·year²)
+    
+    p9Pos, p9Vel := p9Elements.ToCartesian(muYear)
+    // CRITICAL: Convert velocity from AU/year to AU/day for integrator
+    p9Vel = p9Vel.Scale(1.0 / 365.25)
+    
     system.Bodies = append(system.Bodies, nbody.Body{
         ID:       "Planet9",
-        Mass:     params.Mass * 3.003e-6, // Earth masses to solar masses
+        Mass:     params.Mass * 3.003e-6,  // Earth masses to solar masses
         Position: p9Pos,
-        Velocity: p9Vel,
+        Velocity: p9Vel,  // Now in AU/day
     })
     
-    // Store initial ETNO elements for comparison
-    initialETNOs := make([]orbital.OrbitalElements, len(etnos))
-    copy(initialETNOs, etnos)
+    // Add outer planets (optional but recommended for realism)
+    // Jupiter
+    system.Bodies = append(system.Bodies, nbody.Body{
+        ID:       "Jupiter",
+        Mass:     0.000954,  // Solar masses
+        Position: astromath.Vector3{X: 5.2, Y: 0, Z: 0},
+        Velocity: astromath.Vector3{X: 0, Y: 13.07/365.25, Z: 0},  // Convert km/s to AU/day
+    })
     
-    // Add ETNOs as test particles
+    // Saturn  
+    system.Bodies = append(system.Bodies, nbody.Body{
+        ID:       "Saturn",
+        Mass:     0.000286,
+        Position: astromath.Vector3{X: 9.5, Y: 0, Z: 0},
+        Velocity: astromath.Vector3{X: 0, Y: 9.69/365.25, Z: 0},
+    })
+    
+    // Neptune
+    system.Bodies = append(system.Bodies, nbody.Body{
+        ID:       "Neptune",
+        Mass:     0.0000515,
+        Position: astromath.Vector3{X: 30.1, Y: 0, Z: 0},
+        Velocity: astromath.Vector3{X: 0, Y: 5.43/365.25, Z: 0},
+    })
+    
+    // Add ETNOs as massless test particles
     for i, etno := range etnos {
-        pos, vel := etno.ToCartesian(system.G)
+        pos, vel := etno.ToCartesian(muYear)  // Returns AU and AU/year
+        
+        // CRITICAL: Convert velocity from AU/year to AU/day
+        vel = vel.Scale(1.0 / 365.25)
+        
         system.Bodies = append(system.Bodies, nbody.Body{
             ID:       fmt.Sprintf("ETNO_%d", i),
-            Mass:     0, // Massless test particles
-            Position: pos,
-            Velocity: vel,
+            Mass:     0,  // Massless test particles
+            Position: pos,  // AU
+            Velocity: vel,  // AU/day
         })
     }
     
-    // Run integration
-    timestep := 10.0 // days
-    history := system.Integrate(duration*365.25, timestep)
+    // Run integration (timestep and duration in days)
+    timestepDays := 1.0  // 1 day timestep for accuracy
+    durationDays := duration * 365.25  // Convert years to days
+    
+    history := system.Integrate(durationDays, timestepDays)
     
     // Analyze results
     result := SearchResult{
@@ -152,10 +182,120 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
     }
     
     // Calculate ETNO effects and clustering
-    result.ETNOEffects = analyzeETNOChanges(history, etnos) 
+    result.ETNOEffects = analyzeETNOChanges(history, etnos)
     result.ClusteringScore = calculateClustering(result.ETNOEffects)
     
     return result
+}
+
+func analyzeETNOChanges(history []nbody.Snapshot, initialETNOs []orbital.OrbitalElements) []ETNOEffect {
+    if len(history) < 2 {
+        return nil
+    }
+    
+    effects := make([]ETNOEffect, 0)
+    firstSnap := history[0]
+    lastSnap := history[len(history)-1]
+    
+    // Bodies order: Sun(0), Planet9(1), Jupiter(2), Saturn(3), Neptune(4), ETNOs(5+)
+    etnoStart := 5  // Skip Sun, P9, and 3 giant planets
+    
+    // Gravitational parameter for conversions (year units)
+    muYear := 4 * math.Pi * math.Pi  // AU³/(M☉·year²)
+    
+    for i := 0; i < len(initialETNOs) && etnoStart+i < len(lastSnap.Bodies); i++ {
+        initial := firstSnap.Bodies[etnoStart+i]
+        final := lastSnap.Bodies[etnoStart+i]
+        
+        // Skip if positions are invalid
+        if initial.Position.IsZero() || final.Position.IsZero() {
+            continue
+        }
+        
+        // CRITICAL: Convert velocities from AU/day back to AU/year for orbital elements
+        initialVelYear := initial.Velocity.Scale(365.25)
+        finalVelYear := final.Velocity.Scale(365.25)
+        
+        // Convert Cartesian to orbital elements (using year units)
+        initialOrb := orbital.CartesianToOrbital(initial.Position, initialVelYear, muYear)
+        finalOrb := orbital.CartesianToOrbital(final.Position, finalVelYear, muYear)
+        
+        // Validate the conversion
+        if finalOrb.Eccentricity >= 1.0 || finalOrb.Eccentricity < 0 {
+            fmt.Printf("Warning: ETNO_%d bad eccentricity: %.3f\n", i, finalOrb.Eccentricity)
+            continue
+        }
+        
+        if finalOrb.SemiMajorAxis <= 0 || finalOrb.SemiMajorAxis > 10000 {
+            fmt.Printf("Warning: ETNO_%d bad semi-major axis: %.1f\n", i, finalOrb.SemiMajorAxis)
+            continue
+        }
+        
+        // Calculate perihelion changes
+        perihelionInitial := initialOrb.SemiMajorAxis * (1 - initialOrb.Eccentricity)
+        perihelionFinal := finalOrb.SemiMajorAxis * (1 - finalOrb.Eccentricity)
+        perihelionShift := perihelionFinal - perihelionInitial
+        
+        // Sanity check - perihelion shouldn't change by more than a few AU over thousands of years
+        maxReasonableShift := 10.0  // AU
+        if math.Abs(perihelionShift) > maxReasonableShift {
+            fmt.Printf("Warning: ETNO_%d unrealistic perihelion shift: %.1f AU\n", i, perihelionShift)
+            continue
+        }
+        
+        // Calculate inclination change
+        inclinationChange := (finalOrb.Inclination - initialOrb.Inclination) * 180.0 / math.Pi
+        
+        effect := ETNOEffect{
+            ObjectID:          fmt.Sprintf("ETNO_%d", i),
+            InitialElements:   initialETNOs[i],
+            FinalElements:     finalOrb,
+            PerihelionShift:   perihelionShift,
+            InclinationChange: inclinationChange,
+        }
+        
+        effects = append(effects, effect)
+    }
+    
+    return effects
+}
+
+func calculateClustering(effects []ETNOEffect) float64 {
+    if len(effects) < 2 {
+        return 0.0
+    }
+    
+    // Extract longitude of perihelion values
+    longitudes := make([]float64, 0)
+    for _, effect := range effects {
+        // longitude of perihelion = Ω + ω
+        longitude := effect.FinalElements.LongitudeAscendingNode + 
+                    effect.FinalElements.ArgumentPerihelion
+        
+        // Normalize to [0, 2π]
+        for longitude > 2*math.Pi {
+            longitude -= 2*math.Pi
+        }
+        for longitude < 0 {
+            longitude += 2*math.Pi
+        }
+        
+        longitudes = append(longitudes, longitude)
+    }
+    
+    // Calculate Rayleigh statistic for clustering
+    sumCos := 0.0
+    sumSin := 0.0
+    for _, lon := range longitudes {
+        sumCos += math.Cos(lon)
+        sumSin += math.Sin(lon)
+    }
+    
+    n := float64(len(longitudes))
+    R := math.Sqrt(sumCos*sumCos + sumSin*sumSin) / n
+    
+    // R ranges from 0 (uniform) to 1 (perfectly clustered)
+    return R
 }
 
 // addOuterPlanets adds Jupiter, Saturn, Uranus, Neptune
@@ -228,80 +368,7 @@ func addOuterPlanets(system *nbody.System) {
 
 // Update this function in pkg/astronomy/planet9/search.go
 
-func analyzeETNOChanges(history []nbody.Snapshot, initialETNOs []orbital.OrbitalElements) []ETNOEffect {
-    if len(history) == 0 {
-        return nil
-    }
-    
-    effects := make([]ETNOEffect, 0)
-    firstSnap := history[0]
-    lastSnap := history[len(history)-1]
-    
-    // Skip Sun and Planet9, analyze ETNOs
-    etnoStart := 2 // Index where ETNOs start (after Sun and Planet9)
-    
-    for i := 0; i < len(initialETNOs) && etnoStart+i < len(lastSnap.Bodies); i++ {
-        initial := firstSnap.Bodies[etnoStart+i]
-        final := lastSnap.Bodies[etnoStart+i]
-        
-        // Skip if positions are invalid
-        if initial.Position.IsZero() || final.Position.IsZero() {
-            continue
-        }
-        
-        // Convert to orbital elements using solar gravitational parameter
-        mu := 4 * math.Pi * math.Pi // In AU^3/year^2 units
-        
-        initialOrb := orbital.CartesianToOrbital(initial.Position, initial.Velocity, mu)
-        finalOrb := orbital.CartesianToOrbital(final.Position, final.Velocity, mu)
-        
-        // Calculate changes
-        perihelionInitial := initialOrb.SemiMajorAxis * (1 - initialOrb.Eccentricity)
-        perihelionFinal := finalOrb.SemiMajorAxis * (1 - finalOrb.Eccentricity)
-        
-        effect := ETNOEffect{
-            ObjectID:          fmt.Sprintf("ETNO_%d", i),
-            InitialElements:   initialETNOs[i],
-            FinalElements:     finalOrb,
-            PerihelionShift:   perihelionFinal - perihelionInitial,
-            InclinationChange: (finalOrb.Inclination - initialOrb.Inclination) * 180.0 / math.Pi,
-        }
-        
-        effects = append(effects, effect)
-    }
-    
-    return effects
-}
 
-// calculateClustering calculates the Rayleigh test statistic for longitude of perihelion
-func calculateClustering(effects []ETNOEffect) float64 {
-    if len(effects) == 0 {
-        return 0.0
-    }
-    
-    // Calculate mean vector for longitude of perihelion
-    sumCos := 0.0
-    sumSin := 0.0
-    
-    for _, effect := range effects {
-        // Get final longitude of perihelion
-        longPeri := effect.FinalElements.LongitudeAscendingNode + 
-                   effect.FinalElements.ArgumentPerihelion
-        
-        sumCos += math.Cos(longPeri)
-        sumSin += math.Sin(longPeri)
-    }
-    
-    n := float64(len(effects))
-    meanCos := sumCos / n
-    meanSin := sumSin / n
-    
-    // Rayleigh statistic R
-    R := math.Sqrt(meanCos*meanCos + meanSin*meanSin)
-    
-    // Normalize to 0-1 scale (R can be at most 1)
-    return R
-}
 
 // cartesianToOrbital converts position and velocity to orbital elements
 func cartesianToOrbital(pos, vel astromath.Vector3, mu float64) orbital.OrbitalElements {
