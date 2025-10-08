@@ -320,7 +320,7 @@ func cartesianToOrbital(pos, vel astromath.Vector3, mu float64) orbital.OrbitalE
     hMag := h.Magnitude()
     
     // Eccentricity vector
-    eVec := vel.Cross(h).Scale(1/mu).Sub(pos.Normalize())
+    eVec := vel.Cross(h).Scale(1/mu).Sub(pos.Scale(1/r))
     e := eVec.Magnitude()
     
     // Inclination
