@@ -37,6 +37,9 @@ type ProviderNode struct {
     wsClient             *websocket.Conn
     results              map[string]*compute.ComputeJob  // NEW: Store results
     resultsMu            sync.RWMutex                     // NEW: Mutex for thread-safe access
+    heartbeatInterval    time.Duration 
+    reconnectAttempts    int           
+    maxReconnectAttempts int     
 }
 
 func NewProviderNode(
@@ -62,6 +65,8 @@ func NewProviderNode(
         maxBalance:      maxBalance,
         harvestInterval: time.Duration(harvestIntervalHours) * time.Hour,
         jobManager: compute.NewJobManager(workers, 100, compute.NewPricingManager("medas1kc7lctfazdpd8y6ecapdfv3d6ch97prc58qaem")),
+        heartbeatInterval:    time.Duration(heartbeatIntervalMinutes) * time.Minute, 
+        maxReconnectAttempts: 10, 
         results:         make(map[string]*compute.ComputeJob), // NEW: Initialize results map
     }
 }
@@ -72,6 +77,10 @@ func (p *ProviderNode) Start(ctx context.Context) error {
     log.Printf("  Address: %s", p.providerAddr)
     log.Printf("  Endpoint: %s", p.endpointURL)
     log.Printf("  Listening for jobs...")
+
+    if p.heartbeatInterval > 0 {
+        go p.heartbeatRoutine(ctx)
+    }
     
     if p.fundingAddress != "" {
         log.Printf("  Auto-Harvest enabled:")
@@ -86,7 +95,143 @@ func (p *ProviderNode) Start(ctx context.Context) error {
 
     go p.startHTTPServer(ctx)
     
-    return p.subscribeToJobs(ctx)
+    return p.subscribeWithReconnect(ctx)
+}
+
+// KOMPLETT NEU - Diese Funktionen einfügen:
+
+func (p *ProviderNode) heartbeatRoutine(ctx context.Context) {
+    ticker := time.NewTicker(p.heartbeatInterval)
+    defer ticker.Stop()
+    
+    p.sendHeartbeat() // Initial heartbeat
+    
+    for {
+        select {
+        case <-ctx.Done():
+            log.Println("Heartbeat routine stopped")
+            return
+        case <-ticker.C:
+            if err := p.sendHeartbeat(); err != nil {
+                log.Printf("❌ Heartbeat failed: %v", err)
+            }
+        }
+    }
+}
+
+func (p *ProviderNode) sendHeartbeat() error {
+    msg := `{"heart_beat":{}}`
+    
+    cmd := exec.Command(
+        "medasdigitald", "tx", "wasm", "execute",
+        p.contractAddr, msg,
+        "--from", p.providerKey,
+        "--keyring-backend", "test",
+        "--gas", "auto",
+        "--gas-adjustment", "1.3",
+        "--gas-prices", "0.025umedas",
+        "--node", p.rpcURL,
+        "--chain-id", p.chainID,
+        "-y",
+        "--output", "json",
+    )
+    
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    
+    if err := cmd.Run(); err != nil {
+        return fmt.Errorf("heartbeat tx failed: %w", err)
+    }
+    
+    log.Printf("💓 Heartbeat sent successfully")
+    return nil
+}
+
+func (p *ProviderNode) subscribeWithReconnect(ctx context.Context) error {
+    backoff := time.Second
+    maxBackoff := time.Minute
+    
+    for {
+        select {
+        case <-ctx.Done():
+            return ctx.Err()
+        default:
+            err := p.subscribeToJobs(ctx)
+            
+            if err == nil {
+                p.reconnectAttempts = 0
+                return nil
+            }
+            
+            log.Printf("❌ WebSocket error: %v", err)
+            p.reconnectAttempts++
+            
+            if p.reconnectAttempts >= p.maxReconnectAttempts {
+                return fmt.Errorf("max reconnection attempts (%d) reached", p.maxReconnectAttempts)
+            }
+            
+            log.Printf("🔄 Reconnecting in %v (attempt %d/%d)", 
+                backoff, p.reconnectAttempts, p.maxReconnectAttempts)
+            
+            select {
+            case <-time.After(backoff):
+                backoff *= 2
+                if backoff > maxBackoff {
+                    backoff = maxBackoff
+                }
+            case <-ctx.Done():
+                return ctx.Err()
+            }
+        }
+    }
+}
+
+func (p *ProviderNode) pingRoutine(conn *websocket.Conn, ctx context.Context) {
+    ticker := time.NewTicker(30 * time.Second)
+    defer ticker.Stop()
+    
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+            if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+                log.Printf("Ping failed: %v", err)
+                return
+            }
+        }
+    }
+}
+
+func (p *ProviderNode) failJob(jobID uint64, reason string) error {
+    msg := fmt.Sprintf(`{"fail_job":{"job_id":%d,"reason":"%s"}}`, jobID, reason)
+    
+    cmd := exec.Command(
+        "medasdigitald", "tx", "wasm", "execute",
+        p.contractAddr, msg,
+        "--from", p.providerKey,
+        "--keyring-backend", "test",
+        "--gas", "auto",
+        "--gas-adjustment", "1.3",
+        "--gas-prices", "0.025umedas",
+        "--node", p.rpcURL,
+        "--chain-id", p.chainID,
+        "-y",
+        "--output", "json",
+    )
+    
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    
+    if err := cmd.Run(); err != nil {
+        return fmt.Errorf("fail job tx failed: %w", err)
+    }
+    
+    log.Printf("❌ Job %d marked as failed: %s", jobID, reason)
+    return nil
 }
 
 func (p *ProviderNode) autoHarvest(ctx context.Context) {
@@ -181,12 +326,22 @@ func (p *ProviderNode) getProviderBalance() (uint64, error) {
 func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
     wsURL := "wss://rpc.medas-digital.io:26657/websocket"
     
-    conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+    dialer := websocket.Dialer{
+    HandshakeTimeout: 10 * time.Second,
+    }
+    conn, _, err := dialer.Dial(wsURL, nil)
     if err != nil {
         return fmt.Errorf("websocket dial failed: %w", err)
     }
     p.wsClient = conn
     defer conn.Close()
+
+    conn.SetReadLimit(1024 * 1024) // 1MB max message size
+    conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+    conn.SetPongHandler(func(string) error {
+    conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+    return nil
+    })
     
     query := fmt.Sprintf(
         "wasm._contract_address='%s' AND wasm.action='submit_job' AND wasm.provider='%s'",
@@ -210,27 +365,28 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
     }
     
     log.Printf("✅ WebSocket connected and subscribed")
-    
+    go p.pingRoutine(conn, ctx)  // Start ping routine
     for {
-        select {
-        case <-ctx.Done():
-            return nil
-        default:
-            var msg map[string]interface{}
-            if err := conn.ReadJSON(&msg); err != nil {
-                log.Printf("Read error: %v", err)
-                continue
-            }
-            
-            if result, ok := msg["result"].(map[string]interface{}); ok {
-                if events, ok := result["events"].(map[string]interface{}); ok {
-                    p.handleJobEvent(ctx, events)
-                } else if data, ok := result["data"].(map[string]interface{}); ok {
-                    if value, ok := data["value"].(map[string]interface{}); ok {
-                        if txResult, ok := value["TxResult"].(map[string]interface{}); ok {
-                            if result, ok := txResult["result"].(map[string]interface{}); ok {
-                                if evts, ok := result["events"].([]interface{}); ok {
-                                    p.handleJobEventArray(ctx, evts)
+    select {
+    case <-ctx.Done():
+        return nil
+    default:
+        conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+        
+        var msg map[string]interface{}
+                        if err := conn.ReadJSON(&msg); err != nil {
+                            // Check if it's a normal close
+                            if websocket.IsUnexpectedCloseError(err, 
+                                websocket.CloseGoingAway, 
+                                websocket.CloseAbnormalClosure,
+                                websocket.CloseNormalClosure) {
+                                return fmt.Errorf("websocket closed unexpectedly: %w", err)
+                                                }
+                                return err  // Return error for reconnection
+                                }
+        
+                                // Process in goroutine to not block
+                                go p.processWebSocketMessage(msg, ctx)
                                 }
                             }
                         }
@@ -282,17 +438,21 @@ func (p *ProviderNode) handleJobEvent(ctx context.Context, events map[string]int
 }
 
 func (p *ProviderNode) processJob(ctx context.Context, contractJobID uint64) {
-    cj, err := p.getContractJob(ctx, contractJobID)
-    if err != nil {
-        log.Printf("Failed to get job: %v", err)
-        return
-    }
+   cj, err := p.getContractJob(ctx, contractJobID)
+if err != nil {
+    log.Printf("Failed to get job: %v", err)
+    p.failJob(contractJobID, "Failed to fetch job details")  // ADD
+    return
+}
     
     var params map[string]interface{}
-    if err := json.Unmarshal([]byte(cj.Parameters), &params); err != nil {
-        log.Printf("Failed to parse parameters: %v", err)
-        return
-    }
+   if err := json.Unmarshal([]byte(cj.Parameters), &params); err != nil {
+    log.Printf("Failed to parse parameters: %v", err)
+    p.failJob(contractJobID, "Invalid job parameters")  // ADD
+    return
+}
+
+    
     
     log.Printf("Processing job %d: %s", contractJobID, cj.JobType)
     
@@ -304,24 +464,38 @@ func (p *ProviderNode) processJob(ctx context.Context, contractJobID uint64) {
         "",
     )
     if err != nil {
-        log.Printf("Failed to submit job: %v", err)
-        return
-    }
+    log.Printf("Failed to submit job: %v", err)
+    p.failJob(contractJobID, fmt.Sprintf("Processing failed: %v", err))  // ADD
+    return
+}
     
     // Wait for completion and get final job state
     var completedJob *compute.ComputeJob
-    for {
-        time.Sleep(1 * time.Second)
+    timeout := time.After(30 * time.Minute)
+ticker := time.NewTicker(1 * time.Second)
+defer ticker.Stop()
+
+for {
+    select {
+    case <-timeout:
+        log.Printf("Job %d timed out", contractJobID)
+        p.failJob(contractJobID, "Job processing timeout")
+        return
+    case <-ticker.C:
         currentJob, _ := p.jobManager.GetJob(job.ID)
         if currentJob.Status == compute.StatusCompleted {
-            completedJob = currentJob // NEW: Save the completed job
-            break
+            completedJob = currentJob
+            goto completed
         }
         if currentJob.Status == compute.StatusFailed {
             log.Printf("Job failed")
+            p.failJob(contractJobID, "Computation failed")
             return
         }
     }
+}
+
+completed:
     
     // NEW: Store the result for HTTP retrieval
     p.resultsMu.Lock()
