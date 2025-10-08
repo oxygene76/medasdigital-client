@@ -3,6 +3,7 @@ package main
 import (
     "encoding/json"
     "fmt"
+    "math"
     "os"
     "os/exec"
     "strings"
@@ -470,25 +471,34 @@ func submitPlanet9Job(cmd *cobra.Command, args []string) error {
     
     paramsJSON, _ := json.Marshal(params)
     
+    // Use hardcoded contract address if not in config
+    contractAddr := "medas1xr3rq8yvd7qplsw5yx90ftsr2zdhg4e9z60h5duusgxpv72hud3s3cca97"
+    
     fmt.Println("Submitting Planet 9 search job to blockchain...")
-    fmt.Printf("  Contract: %s\n", cfg.Contract.Address)
+    fmt.Printf("  Contract: %s\n", contractAddr)
     fmt.Printf("  Payment: %s\n", p9JobPayment)
     fmt.Printf("  Parameters: %s\n", string(paramsJSON))
+    
+    // Use provider key from config if available
+    keyName := "test-client"
+    if cfg.Provider.KeyName != "" {
+        keyName = cfg.Provider.KeyName
+    }
     
     // Build transaction command
     execCmd := exec.Command(
         "medasdigitald", "tx", "wasm", "execute",
-        cfg.Contract.Address,
+        contractAddr,
         fmt.Sprintf(`{"submit_job":{"service_type":"planet9_search","parameters":"%s","max_price":"1000000","auto_accept":true}}`,
             strings.ReplaceAll(string(paramsJSON), `"`, `\"`)),
-        "--from", cfg.Client.KeyName,
+        "--from", keyName,
         "--amount", p9JobPayment,
         "--gas", "auto",
         "--gas-adjustment", "1.3",
         "--gas-prices", "0.025umedas",
-        "--keyring-backend", cfg.Client.KeyringBackend,
+        "--keyring-backend", cfg.Provider.KeyringBackend,
         "--node", cfg.Chain.RPCEndpoint,
-        "--chain-id", cfg.Chain.ChainID,
+        "--chain-id", cfg.Chain.ID,
         "-y",
     )
     
