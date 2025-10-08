@@ -49,6 +49,7 @@ func NewProviderNode(
     fundingAddress string,
     minBalance, maxBalance uint64,
     harvestIntervalHours int,
+    heartbeatIntervalMinutes int,
 ) *ProviderNode {
     return &ProviderNode{
         contractAddr:    contractAddr,
@@ -389,13 +390,7 @@ func (p *ProviderNode) subscribeToJobs(ctx context.Context) error {
                                 go p.processWebSocketMessage(msg, ctx)
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+                     
 
 func (p *ProviderNode) handleJobEventArray(ctx context.Context, events []interface{}) {
     for _, evt := range events {
