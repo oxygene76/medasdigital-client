@@ -67,11 +67,6 @@ func (v Vector3) Distance(other Vector3) float64 {
     return v.Sub(other).Magnitude()
 }
 
-// Distance returns the distance between two vectors
-func (v Vector3) Distance(other Vector3) float64 {
-    return v.Sub(other).Magnitude()
-}
-
 // IsZero checks if the vector is zero
 func (v Vector3) IsZero() bool {
     return v.X == 0 && v.Y == 0 && v.Z == 0
