@@ -46,30 +46,43 @@ func (s *System) Copy() *System {
     return newSystem
 }
 
-// Integrate runs the N-body simulation for the specified duration
-// using the Leapfrog integration method (2nd order, symplectic)
-func (s *System) Integrate(duration, timestep float64) [][]Body {
-    numSteps := int(duration / timestep)
-    history := make([][]Body, 0, numSteps)
+
+func (s *System) Integrate(duration, timestep float64) []Snapshot {
+    steps := int(duration / timestep)
+    history := make([]Snapshot, 0, steps/100) // Store snapshots every 100 steps
     
     // Store initial state
-    initialCopy := make([]Body, len(s.Bodies))
-    copy(initialCopy, s.Bodies)
-    history = append(history, initialCopy)
+    history = append(history, Snapshot{
+        Time:   s.Time,
+        Bodies: s.copyBodies(),
+    })
     
-    // Integration loop
-    for step := 0; step < numSteps; step++ {
-        s.LeapfrogStep(timestep)
+    for i := 0; i < steps; i++ {
+        s.leapfrogStep(timestep)
         
-        // Store state periodically (every 100 steps to save memory)
-        if (step+1)%100 == 0 || step == numSteps-1 {
-            stateCopy := make([]Body, len(s.Bodies))
-            copy(stateCopy, s.Bodies)
-            history = append(history, stateCopy)
+        // Store snapshot every 100 steps
+        if (i+1)%100 == 0 {
+            history = append(history, Snapshot{
+                Time:   s.Time,
+                Bodies: s.copyBodies(),
+            })
         }
     }
     
+    // Store final state
+    history = append(history, Snapshot{
+        Time:   s.Time,
+        Bodies: s.copyBodies(),
+    })
+    
     return history
+}
+
+// Add this helper method to copy bodies
+func (s *System) copyBodies() []Body {
+    bodies := make([]Body, len(s.Bodies))
+    copy(bodies, s.Bodies)
+    return bodies
 }
 
 // LeapfrogStep performs one step of the Leapfrog integration
