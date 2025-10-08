@@ -40,6 +40,7 @@ type ProviderNode struct {
     heartbeatInterval    time.Duration 
     reconnectAttempts    int           
     maxReconnectAttempts int     
+    lastHeartbeat        time.Time 
 }
 
 func NewProviderNode(
@@ -69,6 +70,7 @@ func NewProviderNode(
         heartbeatInterval:    time.Duration(heartbeatIntervalMinutes) * time.Minute, 
         maxReconnectAttempts: 10, 
         results:         make(map[string]*compute.ComputeJob), // NEW: Initialize results map
+        lastHeartbeat: time.Now(), 
     }
 }
 
@@ -141,11 +143,12 @@ func (p *ProviderNode) sendHeartbeat() error {
     cmd.Stdout = &stdout
     cmd.Stderr = &stderr
     
-    if err := cmd.Run(); err != nil {
+     if err := cmd.Run(); err != nil {
         return fmt.Errorf("heartbeat tx failed: %w", err)
     }
     
-    log.Printf("💓 Heartbeat sent successfully")
+    p.lastHeartbeat = time.Now()  // ADD THIS
+    log.Printf("💓 Heartbeat sent successfully at %s", p.lastHeartbeat.Format("15:04:05"))
     return nil
 }
 
@@ -589,9 +592,34 @@ func (p *ProviderNode) getContractJob(ctx context.Context, jobID uint64) (*Contr
 }
 
 func (p *ProviderNode) startHTTPServer(ctx context.Context) {
-    http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-        w.WriteHeader(http.StatusOK)
-        json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+     http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+        timeSinceHeartbeat := time.Since(p.lastHeartbeat)
+        isHealthy := timeSinceHeartbeat < 24*time.Hour
+        
+        status := map[string]interface{}{
+            "status": "healthy",
+            "provider": p.providerAddr,
+            "heartbeat": map[string]interface{}{
+                "last_sent": p.lastHeartbeat.Format(time.RFC3339),
+                "seconds_ago": int(timeSinceHeartbeat.Seconds()),
+                "minutes_ago": int(timeSinceHeartbeat.Minutes()),
+                "active": isHealthy,
+                "next_in": (p.heartbeatInterval - timeSinceHeartbeat).String(),
+            },
+            "websocket_connected": p.wsClient != nil,
+            "reconnect_attempts": p.reconnectAttempts,
+        }
+        
+        w.Header().Set("Content-Type", "application/json")
+        
+        if !isHealthy {
+            status["status"] = "unhealthy"
+            w.WriteHeader(http.StatusServiceUnavailable)
+        } else {
+            w.WriteHeader(http.StatusOK)
+        }
+        
+        json.NewEncoder(w).Encode(status)
     })
     
     // NEW: Enhanced results handler that returns real PI results
