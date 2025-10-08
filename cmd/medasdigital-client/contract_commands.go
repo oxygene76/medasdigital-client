@@ -303,9 +303,6 @@ var contractProviderNodeCmd = &cobra.Command{
         fmt.Printf("Provider Address: %s\n", providerAddr)
         fmt.Printf("Contract (v2.0): %s\n", contractAddr)  // ADD
         fmt.Printf("Heartbeat: every %d minutes\n", cfg.Provider.HeartbeatIntervalMinutes)  // ADD
-
-            
-        fmt.Printf("Provider Address: %s\n", providerAddr)
         
         if register {
             fmt.Println("Registering provider...")
