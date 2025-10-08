@@ -103,7 +103,7 @@ type Config struct {
         Port                 int    `yaml:"port"`
         Workers              int    `yaml:"workers"`
         HarvestIntervalHours int    `yaml:"harvest_interval_hours"`
-		HeartbeatIntervalMinutes int `yaml:"heartbeat_interval_minutes"`
+		HeartbeatIntervalMinutes int `yaml:"heartbeat_interval_minutes"` 
     } `yaml:"provider"`
     GPU struct {
         Enabled     bool `yaml:"enabled"`
@@ -190,6 +190,7 @@ config := &Config{
                 Port                 int    `yaml:"port"`
                 Workers              int    `yaml:"workers"`
                 HarvestIntervalHours int    `yaml:"harvest_interval_hours"`
+				HeartbeatIntervalMinutes int `yaml:"heartbeat_interval_minutes"` 
             }{
                 Enabled:              false,
                 KeyName:              "my-provider",
@@ -202,6 +203,7 @@ config := &Config{
                 Workers:              4,
                 HarvestIntervalHours: 1,
 				HeartbeatIntervalMinutes: 360,  
+				 
             },
 			GPU: struct {
 				Enabled     bool `yaml:"enabled"`
