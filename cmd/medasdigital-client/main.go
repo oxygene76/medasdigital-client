@@ -1407,6 +1407,7 @@ func loadConfig() *Config {
     config.Provider.Port = viper.GetInt("provider.port")
     config.Provider.Workers = viper.GetInt("provider.workers")
     config.Provider.HarvestIntervalHours = viper.GetInt("provider.harvest_interval_hours")
+	config.Provider.HeartbeatIntervalMinutes = viper.GetInt("provider.heartbeat_interval_minutes")
 	
 	return config
 }
