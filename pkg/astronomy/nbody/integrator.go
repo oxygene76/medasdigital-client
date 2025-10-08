@@ -14,6 +14,11 @@ type Body struct {
     Velocity astromath.Vector3   // Velocity in AU/day
 }
 
+type Snapshot struct {
+    Time   float64
+    Bodies []Body
+}
+
 // System represents the N-body system
 type System struct {
     Bodies []Body
