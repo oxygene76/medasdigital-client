@@ -19,60 +19,70 @@ type OrbitalElements struct {
 
 // ToCartesian converts orbital elements to cartesian position and velocity
 // mu is the gravitational parameter (G * M_sun) in AU³/day²
-func (oe OrbitalElements) ToCartesian(mu float64) (pos, vel astromath.Vector3) {
+// ToCartesian converts orbital elements to position and velocity
+// Returns position in AU and velocity in AU/year when mu is in AU³/(M☉·year²)
+func (o OrbitalElements) ToCartesian(mu float64) (astromath.Vector3, astromath.Vector3) {
     // Solve Kepler's equation for eccentric anomaly
-    E := oe.solveKeplersEquation()
+    E := o.MeanAnomaly
+    for i := 0; i < 10; i++ {
+        E = o.MeanAnomaly + o.Eccentricity*math.Sin(E)
+    }
     
-    // True anomaly from eccentric anomaly
     cosE := math.Cos(E)
-    
-    nu := 2.0 * math.Atan2(
-        math.Sqrt(1+oe.Eccentricity)*math.Sin(E/2),
-        math.Sqrt(1-oe.Eccentricity)*math.Cos(E/2),
-    )
-    
-    // Distance from focus
-    r := oe.SemiMajorAxis * (1 - oe.Eccentricity*cosE)
+    sinE := math.Sin(E)
     
     // Position in orbital plane
-    x := r * math.Cos(nu)
-    y := r * math.Sin(nu)
+    a := o.SemiMajorAxis
+    e := o.Eccentricity
     
-    // Velocity in orbital plane
-    factor := math.Sqrt(mu/oe.SemiMajorAxis) / math.Sqrt(1 - oe.Eccentricity*oe.Eccentricity)
-    vx := -factor * oe.SemiMajorAxis * math.Sin(E)
-    vy := factor * oe.SemiMajorAxis * math.Sqrt(1 - oe.Eccentricity*oe.Eccentricity) * cosE
+    // Distance from focus
+    r := a * (1 - e*cosE)
     
-    // Rotation matrices
-    cosOmega := math.Cos(oe.LongitudeAscendingNode)
-    sinOmega := math.Sin(oe.LongitudeAscendingNode)
-    cosI := math.Cos(oe.Inclination)
-    sinI := math.Sin(oe.Inclination)
-    cosW := math.Cos(oe.ArgumentPerihelion)
-    sinW := math.Sin(oe.ArgumentPerihelion)
+    // Position in orbital plane coordinates
+    x := a * (cosE - e)
+    y := a * math.Sqrt(1-e*e) * sinE
     
-    // Transform to inertial frame
+    // FIXED: Velocity in orbital plane (was wrong!)
+    // Mean motion n = sqrt(mu/a³)
+    n := math.Sqrt(mu / (a * a * a))
+    
+    // Velocity components in orbital plane
+    vx := -a * n * sinE / (1 - e*cosE)
+    vy := a * n * math.Sqrt(1-e*e) * cosE / (1 - e*cosE)
+    
+    // Create rotation matrices for orbital orientation
+    cosOmega := math.Cos(o.LongitudeAscendingNode)
+    sinOmega := math.Sin(o.LongitudeAscendingNode)
+    cosI := math.Cos(o.Inclination)
+    sinI := math.Sin(o.Inclination)
+    cosW := math.Cos(o.ArgumentPerihelion)
+    sinW := math.Sin(o.ArgumentPerihelion)
+    
+    // Transform to 3D space
     // Rotation matrix elements
     r11 := cosOmega*cosW - sinOmega*sinW*cosI
     r12 := -cosOmega*sinW - sinOmega*cosW*cosI
     r21 := sinOmega*cosW + cosOmega*sinW*cosI
     r22 := -sinOmega*sinW + cosOmega*cosW*cosI
-    r31 := sinW * sinI
-    r32 := cosW * sinI
+    r31 := sinW*sinI
+    r32 := cosW*sinI
     
     // Apply rotation to position
-    pos.X = r11*x + r12*y
-    pos.Y = r21*x + r22*y
-    pos.Z = r31*x + r32*y
+    pos := astromath.Vector3{
+        X: r11*x + r12*y,
+        Y: r21*x + r22*y,
+        Z: r31*x + r32*y,
+    }
     
     // Apply rotation to velocity
-    vel.X = r11*vx + r12*vy
-    vel.Y = r21*vx + r22*vy
-    vel.Z = r31*vx + r32*vy
+    vel := astromath.Vector3{
+        X: r11*vx + r12*vy,
+        Y: r21*vx + r22*vy,
+        Z: r31*vx + r32*vy,
+    }
     
     return pos, vel
 }
-
 // solveKeplersEquation solves Kepler's equation M = E - e*sin(E) for E
 func (oe OrbitalElements) solveKeplersEquation() float64 {
     // Newton-Raphson iteration
