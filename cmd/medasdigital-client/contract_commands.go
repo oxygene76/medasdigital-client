@@ -225,6 +225,12 @@ var contractProviderNodeCmd = &cobra.Command{
         }
         providerAddr := strings.TrimSpace(string(addrOutput))
         
+        fmt.Printf("=== Provider Node v2.0 ===\n")  // ADD
+        fmt.Printf("Provider Address: %s\n", providerAddr)
+        fmt.Printf("Contract (v2.0): %s\n", contractAddr)  // ADD
+        fmt.Printf("Heartbeat: every %d minutes\n", cfg.Provider.HeartbeatIntervalMinutes)  // ADD
+
+            
         fmt.Printf("Provider Address: %s\n", providerAddr)
         
         if register {
@@ -238,21 +244,27 @@ var contractProviderNodeCmd = &cobra.Command{
         
         // Create provider node with config values
         node := contract.NewProviderNode(
-            contractAddr,
-            providerAddr,
-            cfg.Provider.KeyName,
-            cfg.Chain.RPCEndpoint,
-            cfg.Chain.ID,
-            "MEDAS Provider Node",
-            cfg.Provider.Endpoint,
-            cfg.Provider.Port,
-            cfg.Provider.Workers,
-            cfg.Provider.FundingAddress,
-            cfg.Provider.MinBalance,
-            cfg.Provider.MaxBalance,
-            cfg.Provider.HarvestIntervalHours,
-        )
-        
+    contractAddr,
+    providerAddr,
+    cfg.Provider.KeyName,
+    cfg.Chain.RPCEndpoint,
+    cfg.Chain.ID,
+    "MEDAS Provider Node v2.0",  // ÄNDERN
+    cfg.Provider.Endpoint,
+    cfg.Provider.Port,
+    cfg.Provider.Workers,
+    cfg.Provider.FundingAddress,
+    cfg.Provider.MinBalance,
+    cfg.Provider.MaxBalance,
+    cfg.Provider.HarvestIntervalHours,
+    cfg.Provider.HeartbeatIntervalMinutes,  // ADD THIS!
+)
+    fmt.Println("\n🚀 Starting with v2.0 features:")
+    fmt.Println("  ✅ Automatic heartbeat every", cfg.Provider.HeartbeatIntervalMinutes, "minutes")
+    fmt.Println("  ✅ WebSocket auto-reconnection")
+    fmt.Println("  ✅ Job failure handling with refunds")
+    fmt.Println("  ✅ Balance auto-harvesting")
+    fmt.Println("")
         return node.Start(context.Background())
     },
 }
@@ -323,8 +335,8 @@ func init() {
     contractCmd.AddCommand(contractProviderNodeCmd)
     
     contractCmd.PersistentFlags().String("contract",
-        "medas1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrswl7kpn",
-        "Contract address")
+    "medas1xr3rq8yvd7qplsw5yx90ftsr2zdhg4e9z60h5duusgxpv72hud3s3cca97",
+    "Contract address")
     
     contractSubmitJobCmd.Flags().String("from", "", "Client key (required)")
     contractSubmitJobCmd.Flags().String("type", "pi_calculation", "Job type")
