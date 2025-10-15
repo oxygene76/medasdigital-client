@@ -151,7 +151,6 @@ func (p *ProviderNode) sendHeartbeat() error {
     log.Printf("💓 Heartbeat sent successfully at %s", p.lastHeartbeat.Format("15:04:05"))
     return nil
 }
-
 func (p *ProviderNode) subscribeWithReconnect(ctx context.Context) error {
     backoff := time.Second
     maxBackoff := time.Minute
@@ -171,18 +170,19 @@ func (p *ProviderNode) subscribeWithReconnect(ctx context.Context) error {
             log.Printf("❌ WebSocket error: %v", err)
             p.reconnectAttempts++
             
-            if p.reconnectAttempts >= p.maxReconnectAttempts {
-                return fmt.Errorf("max reconnection attempts (%d) reached", p.maxReconnectAttempts)
+            // Nach 10 Versuchen längere Pause, aber nicht aufgeben
+            if p.reconnectAttempts % 10 == 0 {
+                log.Printf("⏳ Failed 10 times, waiting 2 minutes...")
+                backoff = 2 * time.Minute
             }
             
-            log.Printf("🔄 Reconnecting in %v (attempt %d/%d)", 
-                backoff, p.reconnectAttempts, p.maxReconnectAttempts)
+            log.Printf("🔄 Reconnecting in %v (attempt %d)", 
+                backoff, p.reconnectAttempts)
             
             select {
             case <-time.After(backoff):
-                backoff *= 2
-                if backoff > maxBackoff {
-                    backoff = maxBackoff
+                if backoff < maxBackoff {
+                    backoff *= 2
                 }
             case <-ctx.Done():
                 return ctx.Err()
