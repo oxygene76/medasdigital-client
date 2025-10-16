@@ -395,3 +395,61 @@ func addOuterPlanets(system *nbody.System) {
         })
     }
 }
+// MonitorFunc wird periodisch während der Integration aufgerufen.
+// step: aktueller Schrittindex (1-basiert), tDays: vergangene Sim-Zeit (Tage ab Start),
+// energyDrift: |E(t)-E0|/|E0|
+type MonitorFunc func(step int, tDays float64, energyDrift float64, s *System)
+
+// IntegrateWithMonitor: wie Integrate, aber mit periodischem Monitor-Callback.
+func (s *System) IntegrateWithMonitor(durationDays, timestepDays, monitorEveryDays float64, monitor MonitorFunc) []Snapshot {
+    steps := int(durationDays / timestepDays)
+    if steps < 1 {
+        return nil
+    }
+
+    // Jahres-Snapshot-Intervall dynamisch
+    snapEvery := int(math.Max(1, math.Round(365.25/timestepDays)))
+
+    history := make([]Snapshot, 0, steps/snapEvery+2)
+    // Startzustand sichern
+    history = append(history, Snapshot{
+        Time:   s.Time,
+        Bodies: s.copyBodies(),
+    })
+
+    // Referenzenergie
+    E0 := s.GetTotalEnergy()
+    startTime := s.Time
+    nextMonitorTime := s.Time + monitorEveryDays
+
+    for i := 0; i < steps; i++ {
+        s.LeapfrogStep(timestepDays)
+
+        // Monitor: alle monitorEveryDays
+        if monitor != nil && s.Time >= nextMonitorTime {
+            E := s.GetTotalEnergy()
+            drift := 0.0
+            if E0 != 0 {
+                drift = math.Abs((E - E0) / E0)
+            }
+            monitor(i+1, s.Time-startTime, drift, s)
+            nextMonitorTime += monitorEveryDays
+        }
+
+        // Snapshots jährlich
+        if (i+1)%snapEvery == 0 {
+            history = append(history, Snapshot{
+                Time:   s.Time,
+                Bodies: s.copyBodies(),
+            })
+        }
+    }
+
+    // Endzustand
+    history = append(history, Snapshot{
+        Time:   s.Time,
+        Bodies: s.copyBodies(),
+    })
+
+    return history
+}
