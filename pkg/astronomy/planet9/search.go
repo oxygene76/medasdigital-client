@@ -17,6 +17,7 @@ const (
     PresetTrujilloSheppard  SearchPreset = "trujillo_sheppard_2014"
     PresetBrownBatygin2021  SearchPreset = "brown_batygin_2021"
     PresetCustom            SearchPreset = "custom"
+    PresetAkari2025         SearchPreset = "akari2025" // <- NEU
 )
 
 type SearchParameters struct {
@@ -78,6 +79,16 @@ func GetPresetParameters(preset SearchPreset) SearchParameters {
             LongitudeAscendingNode: 100.0,
             ArgumentPerihelion:     150.0,
         }
+    case PresetAkari2025:
+        // In den AKARI-Fenstern (500–700 AU, q≈300 AU, i≈16°)
+        return SearchParameters{
+            Mass:                   10.0,     // mitten im 7–17 M⊕ Fenster
+            SemiMajorAxis:          600.0,    // AU
+            Eccentricity:           0.5,      // q = a(1-e) ≈ 300 AU
+            Inclination:            16.0,     // deg
+            LongitudeAscendingNode: 100.0,    // deg (konservativer Default)
+            ArgumentPerihelion:     150.0,    // deg (konservativer Default)
+        }
         
     default:
         // Default custom parameters
@@ -89,6 +100,7 @@ func GetPresetParameters(preset SearchPreset) SearchParameters {
             LongitudeAscendingNode: 100.0,
             ArgumentPerihelion:     145.0,
         }
+        
     }
 }
 
