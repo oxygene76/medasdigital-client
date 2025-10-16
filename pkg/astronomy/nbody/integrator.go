@@ -312,3 +312,38 @@ func (s *System) RecenterToBarycenter() {
         s.Bodies[i].Velocity = s.Bodies[i].Velocity.Sub(vcom)
     }
 }
+// KeplerPeriodYears approximiert die Umlaufzeit (Jahre) aus a≈|r|.
+func KeplerPeriodYears(a float64) float64 {
+    return math.Sqrt(a * a * a) // P[yr] = a^(3/2)
+}
+
+// ChooseStepForSystem wählt einen konservativen dt in Tagen.
+func (s *System) ChooseStepForSystem(targetSubstepsPerOrbit int, minDays, maxDays float64) float64 {
+    minPeriodYears := math.Inf(1)
+    for _, b := range s.Bodies {
+        if b.Mass <= 0 {
+            continue
+        }
+        r := b.Position.Magnitude()
+        if r <= 0 {
+            continue
+        }
+        P := KeplerPeriodYears(r)
+        if P < minPeriodYears {
+            minPeriodYears = P
+        }
+    }
+    if math.IsInf(minPeriodYears, 1) {
+        // Fallback falls keine massiven Körper gefunden wurden
+        return math.Max(minDays, math.Min(10.0, maxDays))
+    }
+    dtYears := minPeriodYears / float64(targetSubstepsPerOrbit)
+    dtDays := dtYears * 365.25
+    if dtDays < minDays {
+        return minDays
+    }
+    if dtDays > maxDays {
+        return maxDays
+    }
+    return dtDays
+}
