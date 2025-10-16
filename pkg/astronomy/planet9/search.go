@@ -146,14 +146,15 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
 }
 
 
-    // Vor der Integration: Schwerpunkt/Impuls nullen (verhindert Drift)
     system.RecenterToBarycenter()
 
-    // Zeitschritt wählen (siehe N-Body-Patches aus vorheriger Antwort)
     dtDays := system.ChooseStepForSystem(2000, 5.0, 30.0) // typ. 10–20 Tage gut
+    fmt.Printf("dt = %.2f days (~%.3f yr)\n", dtDays, dtDays/365.25)
+
     durationDays := duration * 365.25
 
-    history := system.Integrate(durationDays, dtDays /*, snapshotEveryDays e.g. 365.25 */)
+    history := system.Integrate(durationDays, dtDays)
+
 
     
     // Analyze results
