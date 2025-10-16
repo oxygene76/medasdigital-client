@@ -31,6 +31,7 @@ Presets available:
   trujillo_sheppard   - Based on 2012 VP113 discovery (broader search)
   brown_batygin_2021  - Updated parameters with recent discoveries
   custom              - Define your own parameter ranges
+  akari2025           - Within IRAS/AKARI constraints (7–17 M⊕, 500–700 AU, q≈300 AU)
 
 Observationally Constrained Ranges (IRAS/AKARI 2025 Analysis):
   --mass          7-17     (Earth masses) - IR detection limits
