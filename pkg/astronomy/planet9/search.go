@@ -160,12 +160,45 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
 
     system.RecenterToBarycenter()
 
-    dtDays := system.ChooseStepForSystem(5000, 0.5, 2.0) 
-    fmt.Printf("dt = %.2f days (~%.3f yr)\n", dtDays, dtDays/365.25)
+dtDays := system.ChooseStepForSystem(2000, 2.0, 30.0)
+fmt.Printf("dt = %.2f days (~%.3f yr)\n", dtDays, dtDays/365.25)
 
-    durationDays := duration * 365.25
+durationDays := duration * 365.25
+muYear := 4 * math.Pi * math.Pi // hast du bereits oben
 
-    history := system.Integrate(durationDays, dtDays)
+// Indizes der ETNOs (nach deiner Reihenfolge)
+etnoStart := 5
+etnoCount := len(etnos)
+
+// Monitor-Callback: alle 10 kyr
+monitorEveryDays := 10000.0 * 365.25
+monitor := func(step int, tDays float64, energyDrift float64, s *nbody.System) {
+    // Clustering live berechnen (aus aktuellem Zustand)
+    longitudes := make([]float64, 0, etnoCount)
+    for k := 0; k < etnoCount && etnoStart+k < len(s.Bodies); k++ {
+        b := s.Bodies[etnoStart+k]
+        if b.Position.IsZero() { continue }
+        vYear := b.Velocity.Scale(365.25)
+        oe := orbital.CartesianToOrbital(b.Position, vYear, muYear)
+        if oe.Eccentricity >= 1.0 || oe.SemiMajorAxis <= 0 { continue }
+        lon := oe.LongitudeAscendingNode + oe.ArgumentPerihelion
+        // normiere [0,2π)
+        if lon < 0 { lon = math.Mod(lon, 2*math.Pi) + 2*math.Pi }
+        if lon >= 2*math.Pi { lon = math.Mod(lon, 2*math.Pi) }
+        longitudes = append(longitudes, lon)
+    }
+    // Rayleigh-R
+    var sumC, sumS float64
+    for _, L := range longitudes { sumC += math.Cos(L); sumS += math.Sin(L) }
+    R := 0.0
+    if n := float64(len(longitudes)); n > 0 { R = math.Sqrt(sumC*sumC+sumS*sumS) / n }
+
+    fmt.Printf("[t=%7.0f kyr] drift=%6.2e  R=%0.3f  samples=%d\n",
+        tDays/365250.0, energyDrift, R, len(longitudes))
+}
+
+// Integration mit Monitor
+history := system.IntegrateWithMonitor(durationDays, dtDays, monitorEveryDays, monitor)
 
 
     
