@@ -178,6 +178,8 @@ func runPlanet9Search(cmd *cobra.Command, args []string) error {
             preset = planet9.PresetTrujilloSheppard  
         case "brown_batygin_2021":
             preset = planet9.PresetBrownBatygin2021
+        case "akari2025":
+            preset = planet9.PresetAkari2025
         default:
             if args[0] != "custom" {
                 return fmt.Errorf("unknown preset: %s", args[0])
