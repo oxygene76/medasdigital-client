@@ -154,7 +154,16 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
         Position: astromath.Vector3{X: 30.1, Y: 0, Z: 0},
         Velocity: astromath.Vector3{X: 0, Y: 5.43/365.25, Z: 0},
     })
-    
+    p9Elements := orbital.OrbitalElements{
+    SemiMajorAxis:          params.SemiMajorAxis,
+    Eccentricity:           params.Eccentricity,
+    Inclination:            params.Inclination * math.Pi / 180, // passt
+    LongitudeAscendingNode: params.LongitudeAscendingNode * math.Pi / 180,
+    ArgumentPerihelion:     params.ArgumentPerihelion * math.Pi / 180,
+    MeanAnomaly:            0,
+    }
+    p9Elements.EnsureRadians() // <- schadet nie
+
     // Add ETNOs as massless test particles
     for i, etno := range etnos {
         pos, vel := etno.ToCartesian(muYear)  // Returns AU and AU/year
