@@ -148,7 +148,7 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
 
     system.RecenterToBarycenter()
 
-    dtDays := system.ChooseStepForSystem(2000, 5.0, 30.0) // typ. 10–20 Tage gut
+    dtDays := system.ChooseStepForSystem(5000, 0.5, 2.0) 
     fmt.Printf("dt = %.2f days (~%.3f yr)\n", dtDays, dtDays/365.25)
 
     durationDays := duration * 365.25
