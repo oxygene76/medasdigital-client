@@ -251,3 +251,29 @@ func CartesianToOrbital(pos, vel astromath.Vector3, mu float64) OrbitalElements 
         MeanAnomaly:            M,
     }
 }
+// EnsureRadians converts angles from degrees to radians if they look like degrees.
+// It is safe to call multiple times.
+func (o *OrbitalElements) EnsureRadians() {
+    // Wenn eine der Winkelgrößen > 2π ist, gehen wir von Grad aus und konvertieren.
+    twoPi := 2 * math.Pi
+    if o.Inclination > twoPi || o.LongitudeAscendingNode > twoPi ||
+        o.ArgumentPerihelion > twoPi || o.MeanAnomaly > twoPi {
+        toRad := math.Pi / 180.0
+        o.Inclination *= toRad
+        o.LongitudeAscendingNode *= toRad
+        o.ArgumentPerihelion *= toRad
+        o.MeanAnomaly *= toRad
+    }
+    // Normiere in [0, 2π)
+    norm := func(x float64) float64 {
+        x = math.Mod(x, twoPi)
+        if x < 0 {
+            x += twoPi
+        }
+        return x
+    }
+    o.Inclination = norm(o.Inclination)
+    o.LongitudeAscendingNode = norm(o.LongitudeAscendingNode)
+    o.ArgumentPerihelion = norm(o.ArgumentPerihelion)
+    o.MeanAnomaly = norm(o.MeanAnomaly)
+}
