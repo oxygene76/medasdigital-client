@@ -131,45 +131,19 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
         Velocity: p9Vel,  // Now in AU/day
     })
     
-    // Add outer planets (optional but recommended for realism)
-    // Jupiter
+    addOuterPlanets(system)   // nutzt ToCartesian(muYear) + AU/yr→AU/day korrekt
+   // Add ETNOs as massless test particles
+   for i, etno := range etnos {
+    etno.EnsureRadians()                 // <<--- WICHTIG (Grad -> Radiant, Normierung)
+    pos, vel := etno.ToCartesian(muYear) // AU, AU/year
+    vel = vel.Scale(1.0 / 365.25)        // AU/day
     system.Bodies = append(system.Bodies, nbody.Body{
-        ID:       "Jupiter",
-        Mass:     0.000954,  // Solar masses
-        Position: astromath.Vector3{X: 5.2, Y: 0, Z: 0},
-        Velocity: astromath.Vector3{X: 0, Y: 13.07/365.25, Z: 0},  // Convert km/s to AU/day
+        ID:       fmt.Sprintf("ETNO_%d", i),
+        Mass:     0,
+        Position: pos,
+        Velocity: vel,
     })
-    
-    // Saturn  
-    system.Bodies = append(system.Bodies, nbody.Body{
-        ID:       "Saturn",
-        Mass:     0.000286,
-        Position: astromath.Vector3{X: 9.5, Y: 0, Z: 0},
-        Velocity: astromath.Vector3{X: 0, Y: 9.69/365.25, Z: 0},
-    })
-    
-    // Neptune
-    system.Bodies = append(system.Bodies, nbody.Body{
-        ID:       "Neptune",
-        Mass:     0.0000515,
-        Position: astromath.Vector3{X: 30.1, Y: 0, Z: 0},
-        Velocity: astromath.Vector3{X: 0, Y: 5.43/365.25, Z: 0},
-    })
-
-    // Add ETNOs as massless test particles
-    for i, etno := range etnos {
-        pos, vel := etno.ToCartesian(muYear)  // Returns AU and AU/year
-        
-        // CRITICAL: Convert velocity from AU/year to AU/day
-        vel = vel.Scale(1.0 / 365.25)
-        
-        system.Bodies = append(system.Bodies, nbody.Body{
-            ID:       fmt.Sprintf("ETNO_%d", i),
-            Mass:     0,  // Massless test particles
-            Position: pos,  // AU
-            Velocity: vel,  // AU/day
-        })
-    }
+}
 
 
     // Vor der Integration: Schwerpunkt/Impuls nullen (verhindert Drift)
