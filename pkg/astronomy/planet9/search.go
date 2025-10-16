@@ -169,12 +169,17 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
             Velocity: vel,  // AU/day
         })
     }
-    
-    // Run integration (timestep and duration in days)
-    timestepDays := 1.0  // 1 day timestep for accuracy
-    durationDays := duration * 365.25  // Convert years to days
-    
-    history := system.Integrate(durationDays, timestepDays)
+
+
+    // Vor der Integration: Schwerpunkt/Impuls nullen (verhindert Drift)
+    system.RecenterToBarycenter()
+
+    // Zeitschritt wählen (siehe N-Body-Patches aus vorheriger Antwort)
+    dtDays := system.ChooseStepForSystem(2000, 5.0, 30.0) // typ. 10–20 Tage gut
+    durationDays := duration * 365.25
+
+    history := system.Integrate(durationDays, dtDays /*, snapshotEveryDays e.g. 365.25 */)
+
     
     // Analyze results
     result := SearchResult{
@@ -300,6 +305,9 @@ func calculateClustering(effects []ETNOEffect) float64 {
 
 // addOuterPlanets adds Jupiter, Saturn, Uranus, Neptune
 func addOuterPlanets(system *nbody.System) {
+    // mu for ToCartesian in year units:
+    muYear := 4 * math.Pi * math.Pi // AU^3 / yr^2
+
     planets := []struct {
         name string
         mass float64  // solar masses
@@ -354,86 +362,15 @@ func addOuterPlanets(system *nbody.System) {
             },
         },
     }
-    
-    for _, planet := range planets {
-        pos, vel := planet.elem.ToCartesian(system.G)
+
+    for _, p := range planets {
+        pos, velYr := p.elem.ToCartesian(muYear) // AU, AU/yr
+        velDay := velYr.Scale(1.0 / 365.25)      // AU/day for integrator
         system.Bodies = append(system.Bodies, nbody.Body{
-            ID:       planet.name,
-            Mass:     planet.mass,
+            ID:       p.name,
+            Mass:     p.mass,
             Position: pos,
-            Velocity: vel,
+            Velocity: velDay,
         })
-    }
-}
-
-// Update this function in pkg/astronomy/planet9/search.go
-
-
-
-// cartesianToOrbital converts position and velocity to orbital elements
-func cartesianToOrbital(pos, vel astromath.Vector3, mu float64) orbital.OrbitalElements {
-    // This is a simplified conversion - full implementation would be more complex
-    r := pos.Magnitude()
-    v := vel.Magnitude()
-    
-    // Specific orbital energy
-    energy := v*v/2 - mu/r
-    
-    // Semi-major axis
-    a := -mu / (2 * energy)
-    
-    // Angular momentum vector
-    h := pos.Cross(vel)
-    hMag := h.Magnitude()
-    
-    // Eccentricity vector
-    eVec := vel.Cross(h).Scale(1/mu).Sub(pos.Scale(1/r))
-    e := eVec.Magnitude()
-    
-    // Inclination
-    i := math.Acos(h.Z / hMag)
-    
-    // Node vector
-    n := astromath.Vector3{0, 0, 1}.Cross(h)
-    nMag := n.Magnitude()
-    
-    // Longitude of ascending node
-    omega := 0.0
-    if nMag > 0 {
-        omega = math.Atan2(n.Y, n.X)
-    }
-    
-    // Argument of perihelion
-    w := 0.0
-    if nMag > 0 && e > 0 {
-        w = math.Acos(n.Dot(eVec) / (nMag * e))
-        if eVec.Z < 0 {
-            w = 2*math.Pi - w
-        }
-    }
-    
-    // True anomaly
-    nu := 0.0
-    if e > 0 {
-        cosNu := eVec.Dot(pos) / (e * r)
-        nu = math.Acos(math.Max(-1, math.Min(1, cosNu)))
-        if pos.Dot(vel) < 0 {
-            nu = 2*math.Pi - nu
-        }
-    }
-    
-    // Eccentric anomaly
-    E := 2 * math.Atan(math.Sqrt((1-e)/(1+e)) * math.Tan(nu/2))
-    
-    // Mean anomaly
-    M := E - e*math.Sin(E)
-    
-    return orbital.OrbitalElements{
-        SemiMajorAxis:          a,
-        Eccentricity:           e,
-        Inclination:            i,
-        LongitudeAscendingNode: omega,
-        ArgumentPerihelion:     w,
-        MeanAnomaly:            M,
     }
 }
