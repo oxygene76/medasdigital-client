@@ -107,7 +107,7 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
     })
     
     
-    p9Elements = orbital.OrbitalElements{
+    p9Elements := orbital.OrbitalElements{
     SemiMajorAxis:          params.SemiMajorAxis,
     Eccentricity:           params.Eccentricity,
     Inclination:            params.Inclination * math.Pi / 180, // passt
