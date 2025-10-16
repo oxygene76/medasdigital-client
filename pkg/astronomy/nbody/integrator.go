@@ -292,3 +292,23 @@ func (s *System) estimateError(other *System, dt float64) float64 {
     
     return maxError
 }
+// RecenterToBarycenter setzt Schwerpunkt in den Ursprung und Gesamtimpuls auf 0.
+func (s *System) RecenterToBarycenter() {
+    var mTot float64
+    com := astromath.Vector3{}
+    mom := astromath.Vector3{}
+    for _, b := range s.Bodies {
+        mTot += b.Mass
+        com = com.Add(b.Position.Scale(b.Mass))
+        mom = mom.Add(b.Velocity.Scale(b.Mass))
+    }
+    if mTot == 0 {
+        return
+    }
+    com = com.Scale(1.0 / mTot)
+    vcom := mom.Scale(1.0 / mTot)
+    for i := range s.Bodies {
+        s.Bodies[i].Position = s.Bodies[i].Position.Sub(com)
+        s.Bodies[i].Velocity = s.Bodies[i].Velocity.Sub(vcom)
+    }
+}
