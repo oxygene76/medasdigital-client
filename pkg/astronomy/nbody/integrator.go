@@ -59,17 +59,29 @@ func (s *System) Integrate(duration, timestep float64) []Snapshot {
         Bodies: s.copyBodies(),
     })
     
-    for i := 0; i < steps; i++ {
-        s.LeapfrogStep(timestep)  // <- Fixed: capitalized L
-        
-        // Store snapshot every 100 steps
-        if (i+1)%100 == 0 {
-            history = append(history, Snapshot{
-                Time:   s.Time,
-                Bodies: s.copyBodies(),
-            })
+    E0 := s.GetTotalEnergy()
+
+for i := 0; i < steps; i++ {
+    s.LeapfrogStep(timestep)
+
+    // === Energieüberwachung alle 1000 Schritte ===
+    if (i+1)%1000 == 0 {
+        E := s.GetTotalEnergy()
+        drift := math.Abs((E - E0) / E0)
+        if drift > 1e-6 {
+            fmt.Printf("⚠️  Energy drift: %.2e at step %d (t=%.0f d)\n", drift, i+1, s.Time)
         }
     }
+
+    // Snapshots
+    if (i+1)%100 == 0 {
+        history = append(history, Snapshot{
+            Time:   s.Time,
+            Bodies: s.copyBodies(),
+        })
+    }
+}
+
     
     // Store final state
     history = append(history, Snapshot{
