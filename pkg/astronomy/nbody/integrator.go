@@ -24,6 +24,7 @@ type System struct {
     Bodies []Body
     Time   float64 // Current time in Julian days
     G      float64 // Gravitational constant in AU³/(M☉·day²)
+    Eps2   float64 // Softening^2 in AU^2
 }
 
 // NewSystem creates a new N-body system
@@ -32,6 +33,7 @@ func NewSystem() *System {
         Bodies: make([]Body, 0),
         G:      2.959122e-4, // AU³/(M☉·day²) - correct for solar system units
         Time:   0,
+        Eps2:   1e-12,
     }
 }
 
