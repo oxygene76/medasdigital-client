@@ -164,16 +164,15 @@ dtDays := system.ChooseStepForSystem(2000, 2.0, 30.0)
 fmt.Printf("dt = %.2f days (~%.3f yr)\n", dtDays, dtDays/365.25)
 
 durationDays := duration * 365.25
-muYear := 4 * math.Pi * math.Pi // hast du bereits oben
+// muYear ist oben bereits definiert: muYear := 4 * math.Pi * math.Pi
 
-// Indizes der ETNOs (nach deiner Reihenfolge)
+// ETNO-Indizes (bei dir: Sun,P9,Jup,Sat,Nep → ETNOs ab 5)
 etnoStart := 5
 etnoCount := len(etnos)
 
-// Monitor-Callback: alle 10 kyr
-monitorEveryDays := 10000.0 * 365.25
+monitorEveryDays := 10000.0 * 365.25 // alle 10 kyr
 monitor := func(step int, tDays float64, energyDrift float64, s *nbody.System) {
-    // Clustering live berechnen (aus aktuellem Zustand)
+    // Rayleigh-R live berechnen
     longitudes := make([]float64, 0, etnoCount)
     for k := 0; k < etnoCount && etnoStart+k < len(s.Bodies); k++ {
         b := s.Bodies[etnoStart+k]
@@ -181,24 +180,27 @@ monitor := func(step int, tDays float64, energyDrift float64, s *nbody.System) {
         vYear := b.Velocity.Scale(365.25)
         oe := orbital.CartesianToOrbital(b.Position, vYear, muYear)
         if oe.Eccentricity >= 1.0 || oe.SemiMajorAxis <= 0 { continue }
-        lon := oe.LongitudeAscendingNode + oe.ArgumentPerihelion
-        // normiere [0,2π)
-        if lon < 0 { lon = math.Mod(lon, 2*math.Pi) + 2*math.Pi }
-        if lon >= 2*math.Pi { lon = math.Mod(lon, 2*math.Pi) }
-        longitudes = append(longitudes, lon)
+        L := oe.LongitudeAscendingNode + oe.ArgumentPerihelion
+        // normalisieren [0,2π)
+        L = math.Mod(L, 2*math.Pi)
+        if L < 0 { L += 2 * math.Pi }
+        longitudes = append(longitudes, L)
     }
-    // Rayleigh-R
-    var sumC, sumS float64
-    for _, L := range longitudes { sumC += math.Cos(L); sumS += math.Sin(L) }
+    var c, ssum float64
+    for _, L := range longitudes {
+        c += math.Cos(L)
+        ssum += math.Sin(L)
+    }
     R := 0.0
-    if n := float64(len(longitudes)); n > 0 { R = math.Sqrt(sumC*sumC+sumS*sumS) / n }
-
+    if n := float64(len(longitudes)); n > 0 {
+        R = math.Sqrt(c*c+ssum*ssum) / n
+    }
     fmt.Printf("[t=%7.0f kyr] drift=%6.2e  R=%0.3f  samples=%d\n",
         tDays/365250.0, energyDrift, R, len(longitudes))
 }
 
-// Integration mit Monitor
 history := system.IntegrateWithMonitor(durationDays, dtDays, monitorEveryDays, monitor)
+
 
 
     
