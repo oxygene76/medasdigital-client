@@ -224,7 +224,7 @@ func analyzeETNOChanges(history []nbody.Snapshot, initialETNOs []orbital.Orbital
     lastSnap := history[len(history)-1]
     
     // Bodies order: Sun(0), Planet9(1), Jupiter(2), Saturn(3), Neptune(4), ETNOs(5+)
-    etnoStart := 5  // Skip Sun, P9, and 3 giant planets
+    etnoStart := 6  // Skip Sun, P9, and 3 giant planets
     
     // Gravitational parameter for conversions (year units)
     muYear := 4 * math.Pi * math.Pi  // AU³/(M☉·year²)
