@@ -395,32 +395,21 @@ func addOuterPlanets(system *nbody.System) {
         })
     }
 }
-// monitor: live-Logging von Energiedrift und Rayleigh R
-func makeRayleighMonitor(etnoStart, etnoCount int, muYear float64) func(step int, tDays float64, energyDrift float64, sys *nbody.System) {
+func makeRayleighMonitor(etnoStart, etnoCount int, muYear float64) func(step int, tDays float64, energyDrift float64, s *nbody.System) {
     return func(step int, tDays float64, energyDrift float64, sys *nbody.System) {
-        // Rayleigh-R über die Längengrößen der Perihelien der ETNOs (Ω+ω)
-        longs := make([]float64, 0, etnoCount)
-        if len(sys.Bodies) == 0 {
-            fmt.Printf("[t=%6.0f kyr] drift=%6.2e  R=nan  samples=0\n", tDays/365250.0, energyDrift)
-            return
-        }
-        sun := sys.Bodies[0] // heliocentrischer Bezug
+        if len(sys.Bodies) == 0 { return }
+        sun := sys.Bodies[0] // baryzentrische Sonne
 
+        longs := make([]float64, 0, etnoCount)
         for k := 0; k < etnoCount && etnoStart+k < len(sys.Bodies); k++ {
             b := sys.Bodies[etnoStart+k]
             if b.Position.IsZero() { continue }
 
-            // heliocentrische Vektoren
-            rHelio := b.Position.Sub(sun.Position)
-            vHelioDay := b.Velocity.Sub(sun.Velocity)
-            vHelioYear := vHelioDay.Scale(365.25)
-
-            oe := orbital.CartesianToOrbital(rHelio, vHelioYear, muYear)
+            r, vYr := heliocentricState(b, sun)             // <<< neu: helio
+            oe := orbital.CartesianToOrbital(r, vYr, muYear) // GM☉
             if oe.Eccentricity >= 1.0 || oe.SemiMajorAxis <= 0 { continue }
 
-            // Längengrade des Perihels
             L := oe.LongitudeAscendingNode + oe.ArgumentPerihelion
-            // auf [0,2π)
             L = math.Mod(L, 2*math.Pi)
             if L < 0 { L += 2 * math.Pi }
             longs = append(longs, L)
@@ -439,6 +428,7 @@ func makeRayleighMonitor(etnoStart, etnoCount int, muYear float64) func(step int
             tDays/365250.0, energyDrift, R, len(longs))
     }
 }
+
 // analyzeETNOChangesFromTwo: wertet nur ersten/letzten Snapshot aus (RAM-schonend)
 // NEU: nutzt heliocentrische Vektoren (relativ zur Sonne) und etnoStart := 6
 func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbital.OrbitalElements) []ETNOEffect {
@@ -518,3 +508,9 @@ func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbit
     return effects
 }
 
+func heliocentricState(body, sun nbody.Body) (r astromath.Vector3, vYr astromath.Vector3) {
+    r = body.Position.Sub(sun.Position)
+    vDay := body.Velocity.Sub(sun.Velocity)
+    vYr = vDay.Scale(365.25) // AU/day -> AU/year
+    return
+}
