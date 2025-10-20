@@ -418,3 +418,65 @@ func (s *System) IntegrateWithMonitor(durationDays, timestepDays, monitorEveryDa
 
     return history
 }
+func (s *System) IntegrateWithMonitorAndSink(
+    durationDays, timestepDays, monitorEveryDays, snapshotEveryDays float64,
+    monitor MonitorFunc,
+    sink SnapshotSink,
+    firstSnap *Snapshot, lastSnap *Snapshot,
+) error {
+
+    steps := int(durationDays / timestepDays)
+    if steps < 1 { return nil }
+
+    // jährlicher Snapshot im RAM vermeiden: nur wenn explizit gewünscht
+    snapEvery := 0
+    if snapshotEveryDays > 0 {
+        snapEvery = int(snapshotEveryDays / timestepDays)
+        if snapEvery < 1 { snapEvery = 1 }
+    }
+
+    if sink != nil {
+        if err := sink.OnStart(steps, snapEvery); err != nil { return err }
+        // Initialzustand auf Disk?
+        if snapEvery > 0 {
+            if err := sink.OnSnapshot(s.Time, s.copyBodies()); err != nil { return err }
+        }
+    }
+
+    // Start-/Endzustände für spätere Analyse (nur RAM-leichte zwei Snapshots)
+    if firstSnap != nil {
+        *firstSnap = Snapshot{Time: s.Time, Bodies: s.copyBodies()}
+    }
+
+    E0 := s.GetTotalEnergy()
+    startTime := s.Time
+    nextMonitorTime := s.Time + monitorEveryDays
+
+    for i := 0; i < steps; i++ {
+        s.LeapfrogStep(timestepDays)
+
+        // Monitor
+        if monitor != nil && monitorEveryDays > 0 && s.Time >= nextMonitorTime {
+            E := s.GetTotalEnergy()
+            drift := 0.0
+            if E0 != 0 { drift = math.Abs((E - E0) / E0) }
+            monitor(i+1, s.Time-startTime, drift, s)
+            nextMonitorTime += monitorEveryDays
+        }
+
+        // Disk-Snapshot nur in der gewünschten Kadenz
+        if sink != nil && snapEvery > 0 && (i+1)%snapEvery == 0 {
+            if err := sink.OnSnapshot(s.Time, s.copyBodies()); err != nil { return err }
+        }
+    }
+
+    if sink != nil {
+        if err := sink.OnEnd(s.Time - startTime); err != nil { return err }
+        _ = sink.Close()
+    }
+
+    if lastSnap != nil {
+        *lastSnap = Snapshot{Time: s.Time, Bodies: s.copyBodies()}
+    }
+    return nil
+}
