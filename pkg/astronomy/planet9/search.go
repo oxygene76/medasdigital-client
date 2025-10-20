@@ -186,7 +186,7 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
     }
 
     // Live-Monitor (alle 10 kyr)
-    etnoStart := 5
+    etnoStart := 6
     etnoCount := len(etnos)
     monitorEveryDays := 10000.0 * 365.25
     monitor := makeRayleighMonitor(etnoStart, etnoCount, muYear)
@@ -432,7 +432,7 @@ func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbit
     }
 
     effects := make([]ETNOEffect, 0, len(initialETNOs))
-    const etnoStart = 5 // Sun(0), P9(1), Jup(2), Sat(3), Nep(4) → ETNOs ab 5
+    const etnoStart = 6 // Sun(0), P9(1), Jup(2), Sat(3), Nep(4) → ETNOs ab 5
     muYear := 4 * math.Pi * math.Pi // AU^3/(M☉·yr^2)
 
     for i := 0; i < len(initialETNOs) && etnoStart+i < len(first.Bodies) && etnoStart+i < len(last.Bodies); i++ {
