@@ -396,22 +396,36 @@ func addOuterPlanets(system *nbody.System) {
     }
 }
 // monitor: live-Logging von Energiedrift und Rayleigh R
-func makeRayleighMonitor(etnoStart, etnoCount int, muYear float64) func(step int, tDays float64, energyDrift float64, s *nbody.System) {
+func makeRayleighMonitor(etnoStart, etnoCount int, muYear float64) func(step int, tDays float64, energyDrift float64, sys *nbody.System) {
     return func(step int, tDays float64, energyDrift float64, sys *nbody.System) {
         // Rayleigh-R über die Längengrößen der Perihelien der ETNOs (Ω+ω)
         longs := make([]float64, 0, etnoCount)
+        if len(sys.Bodies) == 0 {
+            fmt.Printf("[t=%6.0f kyr] drift=%6.2e  R=nan  samples=0\n", tDays/365250.0, energyDrift)
+            return
+        }
+        sun := sys.Bodies[0] // heliocentrischer Bezug
+
         for k := 0; k < etnoCount && etnoStart+k < len(sys.Bodies); k++ {
             b := sys.Bodies[etnoStart+k]
             if b.Position.IsZero() { continue }
-            vYear := b.Velocity.Scale(365.25)
-            oe := orbital.CartesianToOrbital(b.Position, vYear, muYear)
+
+            // heliocentrische Vektoren
+            rHelio := b.Position.Sub(sun.Position)
+            vHelioDay := b.Velocity.Sub(sun.Velocity)
+            vHelioYear := vHelioDay.Scale(365.25)
+
+            oe := orbital.CartesianToOrbital(rHelio, vHelioYear, muYear)
             if oe.Eccentricity >= 1.0 || oe.SemiMajorAxis <= 0 { continue }
+
+            // Längengrade des Perihels
             L := oe.LongitudeAscendingNode + oe.ArgumentPerihelion
             // auf [0,2π)
             L = math.Mod(L, 2*math.Pi)
             if L < 0 { L += 2 * math.Pi }
             longs = append(longs, L)
         }
+
         var c, s float64
         for _, L := range longs {
             c += math.Cos(L)
@@ -426,14 +440,19 @@ func makeRayleighMonitor(etnoStart, etnoCount int, muYear float64) func(step int
     }
 }
 // analyzeETNOChangesFromTwo: wertet nur ersten/letzten Snapshot aus (RAM-schonend)
+// NEU: nutzt heliocentrische Vektoren (relativ zur Sonne) und etnoStart := 6
 func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbital.OrbitalElements) []ETNOEffect {
     if first == nil || last == nil || len(first.Bodies) == 0 || len(last.Bodies) == 0 {
         return nil
     }
 
     effects := make([]ETNOEffect, 0, len(initialETNOs))
-    const etnoStart = 6 // Sun(0), P9(1), Jup(2), Sat(3), Nep(4) → ETNOs ab 5
+    const etnoStart = 6 // Sun(0), P9(1), Jupiter(2), Saturn(3), Uranus(4), Neptune(5) -> ETNOs ab 6
     muYear := 4 * math.Pi * math.Pi // AU^3/(M☉·yr^2)
+
+    // NEU: Sonne aus erstem/letztem Snapshot holen (heliocentrischer Bezug)
+    sun0 := first.Bodies[0]
+    sun1 := last.Bodies[0]
 
     for i := 0; i < len(initialETNOs) && etnoStart+i < len(first.Bodies) && etnoStart+i < len(last.Bodies); i++ {
         bi := first.Bodies[etnoStart+i]
@@ -442,12 +461,19 @@ func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbit
             continue
         }
 
-        // AU/day → AU/yr zurück für die Bahnelemente
-        viY := bi.Velocity.Scale(365.25)
-        vfY := bf.Velocity.Scale(365.25)
+        // NEU: heliocentrische Vektoren bilden (r = r_body - r_sun, v = v_body - v_sun)
+        r0 := bi.Position.Sub(sun0.Position)
+        v0Day := bi.Velocity.Sub(sun0.Velocity)
+        r1 := bf.Position.Sub(sun1.Position)
+        v1Day := bf.Velocity.Sub(sun1.Velocity)
 
-        initOE := orbital.CartesianToOrbital(bi.Position, viY, muYear)
-        finlOE := orbital.CartesianToOrbital(bf.Position, vfY, muYear)
+        // AU/day -> AU/year für Bahnelemente
+        v0 := v0Day.Scale(365.25)
+        v1 := v1Day.Scale(365.25)
+
+        // Kartesisch -> Bahnelemente
+        initOE := orbital.CartesianToOrbital(r0, v0, muYear)
+        finlOE := orbital.CartesianToOrbital(r1, v1, muYear)
 
         // Plausibilitätschecks
         if finlOE.Eccentricity >= 1.0 || finlOE.Eccentricity < 0 {
@@ -459,22 +485,21 @@ func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbit
             continue
         }
 
+        // Perihelverschiebung Δq
         q0 := initOE.SemiMajorAxis * (1 - initOE.Eccentricity)
         q1 := finlOE.SemiMajorAxis * (1 - finlOE.Eccentricity)
         dq := q1 - q0
-
-        // “vernünftige” Grenze (an dein Projekt angepasst)
-        if math.Abs(dq) > 10 {
+        if math.Abs(dq) > 10 { // konservative Grenze
             fmt.Printf("Warning: ETNO_%d unrealistic perihelion shift: %.1f AU\n", i, dq)
             continue
         }
 
+        // Inklinationsänderung (in Grad)
         diDeg := (finlOE.Inclination - initOE.Inclination) * 180.0 / math.Pi
-        // optional: Änderung der Länge des Perihels
+
+        // Änderung der Länge des Perihels Δ(Ω+ω) auf [-π, π] normiert
         dLongPeri := (finlOE.LongitudeAscendingNode + finlOE.ArgumentPerihelion) -
             (initOE.LongitudeAscendingNode + initOE.ArgumentPerihelion)
-
-        // normiere auf [-π, π] (optional)
         dLongPeri = math.Mod(dLongPeri+math.Pi, 2*math.Pi)
         if dLongPeri < 0 {
             dLongPeri += 2 * math.Pi
@@ -483,7 +508,7 @@ func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbit
 
         effects = append(effects, ETNOEffect{
             ObjectID:          fmt.Sprintf("ETNO_%d", i),
-            InitialElements:   initialETNOs[i],
+            InitialElements:   initialETNOs[i], // deine Eingangsdaten (heliocentrisch, bereits in rad)
             FinalElements:     finlOE,
             PerihelionShift:   dq,
             InclinationChange: diDeg,
@@ -492,3 +517,4 @@ func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbit
     }
     return effects
 }
+
