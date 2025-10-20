@@ -308,7 +308,12 @@ func runPlanet9Test(cmd *cobra.Command, args []string) error {
         MeanAnomaly:            6.2657, // 359.46 degrees
     }
     
-    result := planet9.RunSimulation(testParams, []orbital.OrbitalElements{testETNO}, 100)
+    result := planet9.RunSimulation(
+     testParams,
+     []orbital.OrbitalElements{testETNO},
+     100,
+     planet9.RunOpts{SnapshotEveryKyr: 0}, // keine Snapshots im Test
+     )
     
     fmt.Printf("Test completed!\n")
     fmt.Printf("Clustering score: %.3f\n", result.ClusteringScore)
