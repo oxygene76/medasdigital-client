@@ -241,7 +241,15 @@ func runPlanet9Search(cmd *cobra.Command, args []string) error {
     startTime := time.Now()
     fmt.Println("Running N-body simulation...")
     
-    result := planet9.RunSimulation(searchParams, etnos, simDuration)
+    result := planet9.RunSimulation(
+    searchParams,
+    etnos,
+    simDuration,
+    planet9.RunOpts{
+        SnapshotEveryKyr: p9SnapshotEveryKyr,
+        SnapshotFile:     p9SnapshotFile,
+    },
+    )
     
     elapsed := time.Since(startTime)
     
