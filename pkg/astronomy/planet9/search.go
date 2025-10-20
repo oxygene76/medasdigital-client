@@ -177,8 +177,7 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
         snapshotEveryDays = opts.SnapshotEveryKyr * 1000.0 * 365.25
         path := opts.SnapshotFile
         if path == "" { path = "snapshots.jsonl" }
-        w, err := nbody.NewJSONLSnapshotWriter(path)
-        if err == nil {
+        if w, err := nbody.NewJSONLSnapshotWriter(path); err == nil {
             sink = w
             fmt.Printf("Snapshot stream → %s (every %.1f kyr)\n", path, opts.SnapshotEveryKyr)
         } else {
@@ -186,21 +185,29 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
         }
     }
 
-    // Monitor wie gehabt
-    monitorEveryDays := 10000.0 * 365.25 // alle 10 kyr
+    // Live-Monitor (alle 10 kyr)
+    etnoStart := 5
+    etnoCount := len(etnos)
+    monitorEveryDays := 10000.0 * 365.25
+    monitor := makeRayleighMonitor(etnoStart, etnoCount, muYear)
 
-    // nur Start/Ende im RAM halten:
+    // Nur Start/Ende im RAM behalten (OOM-sicher)
     var firstSnap, lastSnap nbody.Snapshot
-
     if err := system.IntegrateWithMonitorAndSink(
-        durationDays, dtDays, monitorEveryDays, snapshotEveryDays,
-        monitor, sink, &firstSnap, &lastSnap,
+        durationDays,
+        dtDays,
+        monitorEveryDays,
+        snapshotEveryDays,
+        monitor,
+        sink,
+        &firstSnap,
+        &lastSnap,
     ); err != nil {
         fmt.Printf("integration error: %v\n", err)
     }
 
-    // Analyse: nur erste & letzte
-    result := SearchResult{ Parameters: params }
+    // Analyse aus 2 Snapshots
+    result := SearchResult{Parameters: params}
     result.ETNOEffects = analyzeETNOChangesFromTwo(&firstSnap, &lastSnap, etnos)
     result.ClusteringScore = calculateClustering(result.ETNOEffects)
     return result
@@ -387,4 +394,101 @@ func addOuterPlanets(system *nbody.System) {
             Velocity: velDay,
         })
     }
+}
+// monitor: live-Logging von Energiedrift und Rayleigh R
+func makeRayleighMonitor(etnoStart, etnoCount int, muYear float64) func(step int, tDays float64, energyDrift float64, s *nbody.System) {
+    return func(step int, tDays float64, energyDrift float64, sys *nbody.System) {
+        // Rayleigh-R über die Längengrößen der Perihelien der ETNOs (Ω+ω)
+        longs := make([]float64, 0, etnoCount)
+        for k := 0; k < etnoCount && etnoStart+k < len(sys.Bodies); k++ {
+            b := sys.Bodies[etnoStart+k]
+            if b.Position.IsZero() { continue }
+            vYear := b.Velocity.Scale(365.25)
+            oe := orbital.CartesianToOrbital(b.Position, vYear, muYear)
+            if oe.Eccentricity >= 1.0 || oe.SemiMajorAxis <= 0 { continue }
+            L := oe.LongitudeAscendingNode + oe.ArgumentPerihelion
+            // auf [0,2π)
+            L = math.Mod(L, 2*math.Pi)
+            if L < 0 { L += 2 * math.Pi }
+            longs = append(longs, L)
+        }
+        var c, s float64
+        for _, L := range longs {
+            c += math.Cos(L)
+            s += math.Sin(L)
+        }
+        R := 0.0
+        if n := float64(len(longs)); n > 0 {
+            R = math.Sqrt(c*c + s*s) / n
+        }
+        fmt.Printf("[t=%6.0f kyr] drift=%6.2e  R=%0.3f  samples=%d\n",
+            tDays/365250.0, energyDrift, R, len(longs))
+    }
+}
+// analyzeETNOChangesFromTwo: wertet nur ersten/letzten Snapshot aus (RAM-schonend)
+func analyzeETNOChangesFromTwo(first, last *nbody.Snapshot, initialETNOs []orbital.OrbitalElements) []ETNOEffect {
+    if first == nil || last == nil || len(first.Bodies) == 0 || len(last.Bodies) == 0 {
+        return nil
+    }
+
+    effects := make([]ETNOEffect, 0, len(initialETNOs))
+    const etnoStart = 5 // Sun(0), P9(1), Jup(2), Sat(3), Nep(4) → ETNOs ab 5
+    muYear := 4 * math.Pi * math.Pi // AU^3/(M☉·yr^2)
+
+    for i := 0; i < len(initialETNOs) && etnoStart+i < len(first.Bodies) && etnoStart+i < len(last.Bodies); i++ {
+        bi := first.Bodies[etnoStart+i]
+        bf := last.Bodies[etnoStart+i]
+        if bi.Position.IsZero() || bf.Position.IsZero() {
+            continue
+        }
+
+        // AU/day → AU/yr zurück für die Bahnelemente
+        viY := bi.Velocity.Scale(365.25)
+        vfY := bf.Velocity.Scale(365.25)
+
+        initOE := orbital.CartesianToOrbital(bi.Position, viY, muYear)
+        finlOE := orbital.CartesianToOrbital(bf.Position, vfY, muYear)
+
+        // Plausibilitätschecks
+        if finlOE.Eccentricity >= 1.0 || finlOE.Eccentricity < 0 {
+            fmt.Printf("Warning: ETNO_%d bad eccentricity: %.3f\n", i, finlOE.Eccentricity)
+            continue
+        }
+        if finlOE.SemiMajorAxis <= 0 || finlOE.SemiMajorAxis > 10000 {
+            fmt.Printf("Warning: ETNO_%d bad semi-major axis: %.1f\n", i, finlOE.SemiMajorAxis)
+            continue
+        }
+
+        q0 := initOE.SemiMajorAxis * (1 - initOE.Eccentricity)
+        q1 := finlOE.SemiMajorAxis * (1 - finlOE.Eccentricity)
+        dq := q1 - q0
+
+        // “vernünftige” Grenze (an dein Projekt angepasst)
+        if math.Abs(dq) > 10 {
+            fmt.Printf("Warning: ETNO_%d unrealistic perihelion shift: %.1f AU\n", i, dq)
+            continue
+        }
+
+        diDeg := (finlOE.Inclination - initOE.Inclination) * 180.0 / math.Pi
+        // optional: Änderung der Länge des Perihels
+        dLongPeri := (finlOE.LongitudeAscendingNode + finlOE.ArgumentPerihelion) -
+            (initOE.LongitudeAscendingNode + initOE.ArgumentPerihelion)
+
+        // normiere auf [-π, π] (optional)
+        dLongPeri = math.Mod(dLongPeri+math.Pi, 2*math.Pi)
+        if dLongPeri < 0 {
+            dLongPeri += 2 * math.Pi
+        }
+        dLongPeri -= math.Pi
+
+        effects = append(effects, ETNOEffect{
+            ObjectID:          fmt.Sprintf("ETNO_%d", i),
+            InitialElements:   initialETNOs[i],
+            FinalElements:     finlOE,
+            PerihelionShift:   dq,
+            InclinationChange: diDeg,
+            LongPeriChange:    dLongPeri,
+        })
+    }
+    return effects
 }
