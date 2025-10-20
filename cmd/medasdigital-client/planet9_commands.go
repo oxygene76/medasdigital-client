@@ -130,6 +130,9 @@ var (
     // Job submission
     p9JobPayment     string
     p9JobPriority    string
+
+    p9SnapshotEveryKyr float64
+    p9SnapshotFile     string
 )
 
 func init() {
@@ -166,6 +169,9 @@ func init() {
     // Job submission flags
     planet9JobCmd.Flags().StringVar(&p9JobPayment, "payment", "10000000umedas", "Payment amount")
     planet9JobCmd.Flags().StringVar(&p9JobPriority, "priority", "normal", "Job priority (low, normal, high)")
+
+    planet9SearchCmd.Flags().Float64Var(&p9SnapshotEveryKyr, "snapshot-every-kyr", 0.2, "Snapshot cadence in kyr (0 = disable)")
+    planet9SearchCmd.Flags().StringVar(&p9SnapshotFile, "snapshot-file", "snapshots.jsonl", "Path for streamed JSONL snapshots")
 }
 
 func runPlanet9Search(cmd *cobra.Command, args []string) error {
