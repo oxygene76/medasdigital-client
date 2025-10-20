@@ -44,6 +44,11 @@ type ETNOEffect struct {
     LongPeriChange    float64  // Change in longitude of perihelion
 }
 
+type RunOpts struct {
+    SnapshotEveryKyr float64 // 0 = aus
+    SnapshotFile     string  // JSONL Pfad
+}
+
 // GetPresetParameters returns parameters for known presets
 func GetPresetParameters(preset SearchPreset) SearchParameters {
     switch preset {
@@ -104,8 +109,8 @@ func GetPresetParameters(preset SearchPreset) SearchParameters {
     }
 }
 
-func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements, 
-                   duration float64) SearchResult {
+func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
+    durationYears float64, opts RunOpts) SearchResult {
     // Initialize system with proper units
     system := nbody.NewSystem()
     // system.G = 2.959122e-4 (AU³/M☉·day²) is already set correctly
@@ -158,63 +163,49 @@ func RunSimulation(params SearchParameters, etnos []orbital.OrbitalElements,
 }
 
 
-    system.RecenterToBarycenter()
+  system.RecenterToBarycenter()
 
-dtDays := system.ChooseStepForSystem(2000, 2.0, 30.0)
-fmt.Printf("dt = %.2f days (~%.3f yr)\n", dtDays, dtDays/365.25)
+    dtDays := system.ChooseStepForSystem(5000, 0.5, 2.0)
+    fmt.Printf("dt = %.2f days (~%.3f yr)\n", dtDays, dtDays/365.25)
 
-durationDays := duration * 365.25
-// muYear ist oben bereits definiert: muYear := 4 * math.Pi * math.Pi
+    durationDays := durationYears * 365.25
 
-// ETNO-Indizes (bei dir: Sun,P9,Jup,Sat,Nep → ETNOs ab 5)
-etnoStart := 5
-etnoCount := len(etnos)
-
-monitorEveryDays := 10000.0 * 365.25 // alle 10 kyr
-monitor := func(step int, tDays float64, energyDrift float64, s *nbody.System) {
-    // Rayleigh-R live berechnen
-    longitudes := make([]float64, 0, etnoCount)
-    for k := 0; k < etnoCount && etnoStart+k < len(s.Bodies); k++ {
-        b := s.Bodies[etnoStart+k]
-        if b.Position.IsZero() { continue }
-        vYear := b.Velocity.Scale(365.25)
-        oe := orbital.CartesianToOrbital(b.Position, vYear, muYear)
-        if oe.Eccentricity >= 1.0 || oe.SemiMajorAxis <= 0 { continue }
-        L := oe.LongitudeAscendingNode + oe.ArgumentPerihelion
-        // normalisieren [0,2π)
-        L = math.Mod(L, 2*math.Pi)
-        if L < 0 { L += 2 * math.Pi }
-        longitudes = append(longitudes, L)
+    // Snapshot-Kadenz: kyr → days
+    snapshotEveryDays := 0.0
+    var sink nbody.SnapshotSink
+    if opts.SnapshotEveryKyr > 0 {
+        snapshotEveryDays = opts.SnapshotEveryKyr * 1000.0 * 365.25
+        path := opts.SnapshotFile
+        if path == "" { path = "snapshots.jsonl" }
+        w, err := nbody.NewJSONLSnapshotWriter(path)
+        if err == nil {
+            sink = w
+            fmt.Printf("Snapshot stream → %s (every %.1f kyr)\n", path, opts.SnapshotEveryKyr)
+        } else {
+            fmt.Printf("⚠ snapshot sink failed (%v), continuing without disk snapshots\n", err)
+        }
     }
-    var c, ssum float64
-    for _, L := range longitudes {
-        c += math.Cos(L)
-        ssum += math.Sin(L)
+
+    // Monitor wie gehabt
+    monitorEveryDays := 10000.0 * 365.25 // alle 10 kyr
+
+    // nur Start/Ende im RAM halten:
+    var firstSnap, lastSnap nbody.Snapshot
+
+    if err := system.IntegrateWithMonitorAndSink(
+        durationDays, dtDays, monitorEveryDays, snapshotEveryDays,
+        monitor, sink, &firstSnap, &lastSnap,
+    ); err != nil {
+        fmt.Printf("integration error: %v\n", err)
     }
-    R := 0.0
-    if n := float64(len(longitudes)); n > 0 {
-        R = math.Sqrt(c*c+ssum*ssum) / n
-    }
-    fmt.Printf("[t=%7.0f kyr] drift=%6.2e  R=%0.3f  samples=%d\n",
-        tDays/365250.0, energyDrift, R, len(longitudes))
-}
 
-history := system.IntegrateWithMonitor(durationDays, dtDays, monitorEveryDays, monitor)
-
-
-
-    
-    // Analyze results
-    result := SearchResult{
-        Parameters: params,
-    }
-    
-    // Calculate ETNO effects and clustering
-    result.ETNOEffects = analyzeETNOChanges(history, etnos)
+    // Analyse: nur erste & letzte
+    result := SearchResult{ Parameters: params }
+    result.ETNOEffects = analyzeETNOChangesFromTwo(&firstSnap, &lastSnap, etnos)
     result.ClusteringScore = calculateClustering(result.ETNOEffects)
-    
     return result
-}
+
+    }
 
 func analyzeETNOChanges(history []nbody.Snapshot, initialETNOs []orbital.OrbitalElements) []ETNOEffect {
     if len(history) < 2 {
